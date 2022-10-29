@@ -1,0 +1,157 @@
+<html>
+
+<head>
+    <title>New Audio</title>
+</head>
+
+<body>
+    <canvas></canvas>
+    Prueba de audio
+
+</body>
+<style>
+    /* canvas {
+        width: 100%;
+        height: 100%;
+    } */
+</style>
+<script>
+    const WIDTH = 800;
+    const HEIGHT = 300;
+    const canvas = document.querySelector("canvas");
+    const ctx = canvas.getContext("2d");
+    let analyzer;
+    async function getAudio0() {
+        navigator.mediaDevices.enumerateDevices().then((devices) => {
+            console.log(JSON.stringify(devices));
+            devices = devices.filter((d) => d.kind === 'audiooutput');
+            return devices;
+        }).then((devices) => {
+            console.log(JSON.stringify(devices));
+            return navigator.mediaDevices
+                .getUserMedia({ audio: {groupId: devices[0].groupId} });
+        }).then((stream) => {
+            const audioCtx = new AudioContext();
+            analyzer = audioCtx.createAnalyser();
+            const source = audioCtx.createMediaStreamSource(stream);
+            source.connect(analyzer);
+            // How much data should we collect
+            analyzer.fftSize = 2 ** 8;
+            // pull the data off the audio
+            // how many pieces of data are there?!?
+            bufferLength = analyzer.frequencyBinCount;
+            const timeData = new Uint8Array(bufferLength);
+            const frequencyData = new Uint8Array(bufferLength);
+            drawTimeData(timeData);
+            drawFrequency(frequencyData);
+        });
+    }
+    async function getAudio() {
+        navigator.mediaDevices
+            .getDisplayMedia({ video: true, audio: true }).then((displayStream) => {
+                canvas.width = WIDTH;
+                canvas.height = HEIGHT;
+                const audioCtx = new AudioContext();
+                analyzer = audioCtx.createAnalyser();
+                let tracks = [...displayStream.getTracks()];
+                const stream = new MediaStream(tracks);
+                const source = audioCtx.createMediaStreamSource(stream);
+                source.connect(analyzer);
+                // How much data should we collect
+                analyzer.fftSize = 2 ** 6;
+                // pull the data off the audio
+                // how many pieces of data are there?!?
+                bufferLength = analyzer.frequencyBinCount;
+                const timeData = new Uint8Array(bufferLength);
+                const frequencyData = new Uint8Array(bufferLength);
+                bufferLength -= parseInt(bufferLength*.4);
+                drawTimeData(timeData);
+                drawFrequency(frequencyData);
+            });
+    }
+    getAudio();
+    function drawFrequency(frequencyData) {
+        // get the frequency data into our frequencyData array
+        analyzer.getByteFrequencyData(frequencyData);
+        let x = 0;
+        const barWidth = WIDTH / bufferLength;
+        ctx.beginPath();
+        frequencyData.forEach((amount, i) => {
+            const percent = amount / 255;
+            const [h, s, l] = [360 / (percent * 360) - 0.5, 0.8, 0.5];
+            const [r, g, b] = hslToRgb(h, s, l);
+            ctx.fillStyle = `rgb(${r},${g},${b})`;
+            let barHeight = (HEIGHT * percent);
+            ctx.fillRect(x, HEIGHT - barHeight, barWidth, barHeight);
+            x += barWidth;
+            if (i >= bufferLength) {
+                return;
+            }
+        });
+        ctx.stroke();
+        requestAnimationFrame(() => drawFrequency(frequencyData));
+    }
+    function drawTimeData(timeData) {
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        analyzer.getByteTimeDomainData(timeData);
+        const sliceWidth = WIDTH / (bufferLength + parseInt(bufferLength*.4));
+        ctx.lineWidth = sliceWidth;
+        ctx.beginPath();
+        ctx.moveTo(0, HEIGHT / 2);
+        let x=0,lastX = 0, lastY=0;
+        timeData.forEach((data, i) => {
+            let v = data / 128;
+            const diff = 5 * (v - 1);
+            v = 1 + diff;
+            const y = (v * HEIGHT) / 2;
+
+            ctx.moveTo(x, HEIGHT/2);
+            ctx.lineTo(x, y);
+
+            var xc = (lastX + x) / 2;
+            var yc = (lastY + y) / 2;
+            lastX=x;
+            lastY=y;
+            x += sliceWidth;
+        });
+        const grd = ctx.createLinearGradient(0, 0, WIDTH, 0);
+        grd.addColorStop(0, "red");
+        grd.addColorStop(0.15, "yellow");
+        grd.addColorStop(0.3, "green");
+        grd.addColorStop(0.45, "aqua");
+        grd.addColorStop(0.6, "blue");
+        grd.addColorStop(0.7, "fuchsia");
+        grd.addColorStop(1, "red");
+        ctx.strokeStyle = grd;
+        ctx.stroke();
+
+        // call itself as soon as possible
+        requestAnimationFrame(() => drawTimeData(timeData));
+    }
+    function hslToRgb(h, s, l) {
+        let r;
+        let g;
+        let b;
+        if (s == 0) {
+            r = g = b = l; // achromatic
+        } else {
+            const hue2rgb = function hue2rgb(p, q, t) {
+                if (t < 0) t += 1;
+                if (t > 1) t -= 1;
+                if (t < 1 / 6) return p + (q - p) * 6 * t;
+                if (t < 1 / 2) return q;
+                if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+                return p;
+            };
+            const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+            const p = 2 * l - q;
+            r = hue2rgb(p, q, h + 1 / 3);
+            g = hue2rgb(p, q, h);
+            b = hue2rgb(p, q, h - 1 / 3);
+        }
+        return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+    }
+</script>
+
+</html>
