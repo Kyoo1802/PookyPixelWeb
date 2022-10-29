@@ -1,348 +1,967 @@
-const char global_js_h[] PROGMEM = R"(const NetworkStatus = {
-    CONNECTED: 0,
-    CONNECTING: 1,
-    DISCONNECTED: 2,
-    ERROR: 3,
+const char global_js_h[] PROGMEM = R"(// Common
+const localStorage = window.localStorage;
+
+function radios(name) {
+    return document.getElementsByName(name);
 }
-const LEDX_NAME = 'LedX';
-const LEDX_IP = '192.168.1.100';
-const EMPTY = new Uint8Array(3);
-class WsConnection {
-    constructor() {
-        this.deviceInfo = {
-            protocol: 'ws://',
-            ip: LEDX_IP,
-            port: ':7171/',
-            status: NetworkStatus.DISCONNECTED,
-            uploadBytes: 0,
-            downloadBytes: 0,
-            msgReceived: 0,
-            msgSent: 0,
+function id(idName) {
+    return document.getElementById(idName);
+}
+function ids(idPrefix, size) {
+    let elements = [];
+    for (let i = 0; i < size; i++) {
+        elements[i] = document.getElementById(idPrefix + i);
+    }
+    return elements;
+}
+function idFrom(element, idName) {
+    return element.querySelector('#' + idName);
+}
+function all(query) {
+    return document.querySelectorAll(query);
+}
+function one(query) {
+    return document.querySelector(query);
+}
+function tags(tag) {
+    return document.getElementsByTagName(tag);
+}
+function tagsFrom(element, tag) {
+    return element.getElementsByTagName(tag);
+}
+function click(element, fn) {
+    element.addEventListener('click', e => fn(e));
+}
+function input(element, fn) {
+    element.addEventListener('input', e => fn(e));
+}
+function cacheRadio(element, cacheKey, radioValue, fn) {
+    if (loadCache(cacheKey) == radioValue) {
+        element.checked = true;
+        fn();
+    }
+    element.addEventListener('input', e => {
+        fn(e);
+        updateCache(cacheKey, radioValue);
+    });
+}
+function cacheCheck(element, cacheKey, fn) {
+    if (initBoolCache(element, cacheKey)) {
+        fn();
+    }
+    element.addEventListener('input', e => {
+        fn(e);
+        updateCache(cacheKey, element.checked);
+    });
+}
+function cacheInput(element, cacheKey, fn) {
+    if (initCache(element, cacheKey)) {
+        fn();
+    }
+    element.addEventListener('input', e => {
+        fn(e);
+        updateCache(cacheKey, element.value);
+    });
+}
+function intCacheInput(element, cacheKey, fn) {
+    if (initIntCache(element, cacheKey)) {
+        fn();
+    }
+    element.addEventListener('input', e => {
+        fn(e);
+        updateCache(cacheKey, element.value);
+    });
+}
+function change(element, fn) {
+    element.addEventListener('change', e => fn(e));
+}
+function onLoad(fn) {
+    window.addEventListener('load', e => fn(e));
+}
+function initBoolCache(element, cacheKey) {
+    if (loadCache(cacheKey) !== null) {
+        let v = loadCache(cacheKey);
+        element.checked = v == true || v === 'true';
+        return true;
+    }
+    return false;
+}
+function initIntCache(element, cacheKey) {
+    if (loadCache(cacheKey) !== null) {
+        element.value = parseInt(loadCache(cacheKey));
+        return true;
+    }
+    return false;
+}
+function initCache(element, cacheKey) {
+    if (loadCache(cacheKey) !== null) {
+        element.value = loadCache(cacheKey);
+        return true;
+    }
+    return false;
+}
+function updateCache(cacheKey, value) {
+    localStorage.setItem(cacheKey, value);
+}
+function loadCache(cacheKey) {
+    return localStorage.getItem(cacheKey);
+}
+function hideId(idC) {
+    hide(id(idC));
+}
+function hide(component) {
+    component.classList.add("hide");
+}
+function showId(idC) {
+    show(id(idC));
+}
+function show(component) {
+    component.classList.remove("hide");
+}
+function clearSelect(select) {
+    while (select.firstChild) {
+        select.removeChild(select.firstChild);
+    }
+}
+function logI(msg) {
+    console.log(msg);
+}
+function replacer(key, value) {
+    if (value instanceof Map) {
+        return {
+            dataType: 'Map',
+            value: Array.from(value.entries()), // or with spread: value: [...value]
         };
-        this.nodes = new Map();
+    } else {
+        return value;
     }
-    // Requires a function which outputus a PixelInfo of object
-    // which contains a string of pixels.
-    init(initNodes) {
-        this.initNodes = initNodes;
-        // setTimeout(() => {
-        //     this.wsConnect();
-        // }, 3000);
-         this.createFakeNode();
-    }
-    createFakeNode() {
-        let newDriver = new Driver({ command: "IDENTIFY", id: 'Ledx-1001', ip: '192.168.1.1', type: 'DRIVER', state: 'READY', channels: 2, leds: 1000 }, this);
-        this.nodes.set(newDriver.id, newDriver);
-    }
-    isFake() {
-        return !!this.nodes.get('Ledx-1001');
-    }
-    wsConnect(retries = 2) {
-        var self = this;
-        if (this.deviceInfo.status == NetworkStatus.CONNECTING) {
-            return
+}
+function reviver(key, value) {
+    if (typeof value === 'object' && value !== null) {
+        if (value.dataType === 'Map') {
+            return new Map(value.value);
         }
-        this.deviceInfo.status = NetworkStatus.CONNECTING;
-        logI("Starting connection to: " + (this.deviceInfo.protocol + this.deviceInfo.ip + this.deviceInfo.port));
-        try {
-            this.ws = new WebSocket(this.deviceInfo.protocol + this.deviceInfo.ip + this.deviceInfo.port);
-            this.ws.onopen = function (e) {
-                logI("Network connected!");
-                self.deviceInfo.status = NetworkStatus.CONNECTED;
-            };
-            this.ws.onclose = function (e) {
-                logI("Network Closed!");
-                if (self.isFake()) {
-                    return;
-                }
-                self.deviceInfo.status = NetworkStatus.DISCONNECTED;
-                [...self.nodes.keys()].forEach((node) => {
-                    self.nodes.get(node).isLost = true;
-                });
-            };
-            this.ws.onmessage = function (rawRcvdMsg) {
-                self.deviceInfo.downloadBytes += rawRcvdMsg.data.length;
-                self.deviceInfo.msgReceived++;
-                self.handleRcvdMsg(JSON.parse(rawRcvdMsg.data));
-            };
-            this.ws.onerror = function (e) {
-                logI("Websocket unexpected error: " + JSON.stringify(e));
-                if (self.isFake()) {
-                    return;
-                }
-                self.handleRcvdMsg({
-                    id: LEDX_NAME,
-                    command: 'LOST',
-                });
-                self.deviceInfo.status = NetworkStatus.DISCONNECTED;
-                self.ws.close();
-                if (retries > 0) {
-                    self.deviceInfo.status = NetworkStatus.CONNECTING;
-                    setTimeout(() => {
-                        self.wsConnect(retries - 1);
-                    }, 1000);
-                }
-            };
-        } catch (e) { }
     }
-    handleRcvdMsg(rcvdMsg) {
-        if (!rcvdMsg.command) {
-            logI('Invalid msg: ' + rcvdMsg);
-            return;
-        }
-        let currentDriver = this.nodes.get(rcvdMsg.id);
-        if (rcvdMsg.command === 'LOST') {
-            logI('Node lost: ' + rcvdMsg.id);
-            if (currentDriver) {
-                currentDriver.isLost = true;
-            }
-        } else if (rcvdMsg.command === 'IDENTIFY') {
-            if (!currentDriver) {
-                logI('Adding node: ' + JSON.stringify(rcvdMsg));
-                let newDriver = new Driver(rcvdMsg, this);
-                if (this.initNodes && this.initNodes[rcvdMsg.id]) {
-                    newDriver.masterTemplate = this.initNodes[rcvdMsg.id];
-                }
-                this.nodes.set(rcvdMsg.id, newDriver);
-            } else if (currentDriver.isLost) {
-                logI('Recovering Node: ' + JSON.stringify(rcvdMsg));
-                currentDriver.isLost = false;
+    return value;
+}
+function readTextFile(url) {
+    return new Promise(function (resolve, reject) {
+        let xhr = new XMLHttpRequest();
+        xhr.overrideMimeType("application/json");
+        xhr.open("GET", url);
+        xhr.onload = function () {
+            if (this.status >= 200 && this.status < 300) {
+                resolve(xhr.response);
             } else {
-                // logI('Updating Node: ' + JSON.stringify(rcvdMsg));
-                currentDriver.metadata = rcvdMsg;
+                reject({
+                    status: this.status,
+                    statusText: xhr.statusText
+                });
             }
-        }
-    }
-    sendWsMsg(msg = EMPTY) {
-        if (!this.ws || !this.ws.readyState || this.ws.readyState == WebSocket.CLOSED) {
-            logI("Msg not sent: Not Connected");
-            return 0;
-        }
-        if (this.ws.readyState == WebSocket.OPEN && msg.length > 0) {
-            this.deviceInfo.uploadBytes += msg.length;
-            this.deviceInfo.msgSent++;
-            this.ws.send(msg);
-            return msg.length;
-        } else {
-            logI("Msg not sent: " + JSON.stringify(this.ws));
-        }
-        return 0;
-    }
-    getNodes() {
-        return this.nodes;
-    }
-    getDeviceInfo() {
-        return this.deviceInfo;
-    }
+        };
+        xhr.onerror = function () {
+            reject({
+                status: this.status,
+                statusText: xhr.statusText
+            });
+        };
+        xhr.send();
+    });
+}
+function range(x, a, b) {
+    return x >= a && x <= b;
 }
 
-class Driver {
-    constructor(metadata, ws) {
-        this.ws = ws;
-        this.id = metadata.id;
-        this.metadata = metadata;
-        if (metadata.template) {
-            logI('Initial template loaded from: Driver.');
-            this.masterTemplate = MasterTemplate.fromJson(JSON.parse(window.atob(metadata.template)));
-            globalMIdx += this.allModulesCount();
-        } else if (this.existStoredTemplate(this.id)) {
-            logI('Initial template loaded from: Local storage: ' + this.id);
-            this.masterTemplate = this.loadTemplate(this.id);
-            globalMIdx += this.allModulesCount();
-        }
+const myRadios = all('input[type="radio"]');
+const ledXCanvas = id('ledx-canvas');
+const ledXVideo = id('ledx-video');
+const bkgStartColor = id('bkg-start-color');
+const bkgEndColorLabel = id('bkg-end-color-label');
+const bkgEndColor = id('bkg-end-color');
+const bkgSolid = id('bkg-solid');
+const bkgRadial = id('bkg-radial');
+const bkgLineal = id('bkg-lineal');
+const bkgAnimate = id('bkg-animate');
+const bkgCamStart = id('bkg-cam-start');
+const bkgCamSelect = id('bkg-cam-select');
+const bkgMicStart = id('bkg-mic-start');
+const bkgMics = ids('mic-', 2);
+const bkgScreenStart = id('bkg-screen-start');
+const bkgAudioStart = id('bkg-audio-start');
+const bkgAudios = ids('audio-', 2);
+const canvasModule = id('canvas-module');
+const canvasModuleX = id('canvas-module-x');
+const canvasModuleY = id('canvas-module-y');
+const filters = ids('filter-', 3);
+const txtText = id('txt-text');
+const txtFont = id('txt-font');
+const txtStartColor = id('txt-start-color');
+const txtMidColor = id('txt-mid-color');
+const txtEndColor = id('txt-end-color');
+const txtSpeed = id('txt-speed');
+const txtSpeedValue = id('txt-speed-value');
+const txtSize = id('txt-size');
+const txtSizeValue = id('txt-size-value');
+const txtPosition = id('txt-position');
+const txtPositionValue = id('txt-position-value');
+const driverFps = id("driver-fps");
+const driverFpsValue = id("driver-fps-value");
+const displaySize = id("display-size");
+const displaySizeValue = id("display-size-value");
+const displayPosX = id("display-pos-x");
+const displayPosXValue = id("display-pos-x-value");
+const displayPosY = id("display-pos-y");
+const displayPosYValue = id("display-pos-y-value");
+const menuMatrix = id("menu-matrix");
+const ledMatrixWidth = id("led-matrix-width");
+const ledMatrixHeight = id("led-matrix-height");
+const deviceStatus = id("device-status");
+const deviceStatusMsg = id("device-status-msg");
+const renderMsg = id("render-msg");
+const driversUi = id("drivers");
 
-        if (!this.masterTemplate || !this.masterTemplate.channels || metadata.channels != this.masterTemplate.channels.length) {
-            logI('Initial template loaded from: Code.');
-            this.masterTemplate = MasterTemplate.fromChannels(metadata.channels);
-            globalMIdx += this.allModulesCount();
-        }
-        this.isLost = false;
-        this.color = Math.floor(Math.random() * 16777215).toString(16);
-    }
-    toHtml(prevHtml = '') {
-        const m = this.metadata;
-        const newHtml = 'Ip: ' + m.ip + ', Type: ' + m.type + ', Channels: ' + m.channels
-            + ', Leds: ' + m.leds;
-        return newHtml === prevHtml ? '' : newHtml;
-    }
-    setTemplateName(cIdx, templateName) {
-        const channels = this.masterTemplate.channels;
-        if (!channels[cIdx]) {
-            channels[cIdx] = new Channel(templateName);
-        } else {
-            channels[cIdx].templateName = templateName;
-        }
-        console.log('Update driver channel [template name] ' + cIdx + ' ' + templateName);
-    }
-    setTemplateColorOrder(cIdx, colorOrder) {
-        const channels = this.masterTemplate.channels;
-        channels[cIdx].colorOrder = colorOrder;
-        console.log('Update driver channel [template colorOrder] ' + cIdx + ' ' + colorOrder);
-    }
-    getTemplateName(cIdx) {
-        return this.masterTemplate.channels[cIdx].templateName;
-    }
-    addModule(cIdx, mIdx, module) {
-        this.masterTemplate.channels[cIdx].modules[mIdx] = module;
-        console.log('Update driver: addModule ' + cIdx + '-' + mIdx + ' ' + JSON.stringify(module));
-    }
-    removeModule(cIdx, mIdx) {
-        this.masterTemplate.channels[cIdx].modules[mIdx] = undefined;
-        console.log('Update driver: removeModule ' + cIdx + '-' + mIdx);
-    }
-    updateModule(cIdx, mIdx, x, y, w, h, d) {
-        const module = this.masterTemplate.channels[cIdx].modules[mIdx];
-        module.x = parseInt(x);
-        module.y = parseInt(y);
-        module.w = parseInt(w);
-        module.h = parseInt(h);
-        module.d = parseInt(d);
-        console.log('Update driver: updateModule ' + cIdx + '-' + mIdx + ' ' + JSON.stringify(module));
-    }
+let radioState = {};
+let wsConnection = new WsConnection();
+let canvasDrawer = new CanvasDrawer(ledXCanvas, ledXCanvas.getBoundingClientRect().width,
+    ledXCanvas.getBoundingClientRect().height, wsConnection, uiNotification);
+onLoad(() => {
+    loadComponents();
+});
 
-    saveDriver() {
-        const eTemplate = window.btoa(JSON.stringify(this.masterTemplate));
-        if (eTemplate !== this.currentStoredTemplate(this.id)) {
-            this.setETemplate(this.id, eTemplate)
-            this.ws.sendWsMsg(eTemplate);
-            console.log('New template saved, sent: ' + eTemplate);
+async function loadComponents() {
+    setupToggleBehavior(myRadios);
+    setupSplash();
+
+    // Background
+    cacheInput(bkgStartColor, 'bkgStartColor', () => {
+        canvasDrawer.sendCommand("BkgPainter", "setStartColor", bkgStartColor.value);
+    });
+    cacheInput(bkgEndColor, 'bkgEndColor', () => {
+        canvasDrawer.sendCommand("BkgPainter", "setEndColor", bkgEndColor.value);
+    });
+    cacheCheck(bkgAnimate, 'bkgAnimate', () => {
+        canvasDrawer.sendCommand("BkgPainter", "setAnimate", bkgAnimate.checked);
+    });
+    cacheRadio(bkgSolid, 'bkg-color', 'SOLID', () => {
+        canvasDrawer.sendCommand("BkgPainter", "setColorState", 'SOLID');
+        hide(bkgEndColor);
+        hide(bkgEndColorLabel);
+    });
+    cacheRadio(bkgRadial, 'bkg-color', 'RADIAL', () => {
+        canvasDrawer.sendCommand("BkgPainter", "setColorState", 'RADIAL');
+        show(bkgEndColor);
+        show(bkgEndColorLabel);
+    });
+    cacheRadio(bkgLineal, 'bkg-color', 'LINEAL', () => {
+        canvasDrawer.sendCommand("BkgPainter", "setColorState", 'LINEAL');
+        show(bkgEndColor);
+        show(bkgEndColorLabel);
+    });
+    click(bkgCamStart, () => {
+        if (radioState['bkg-cam-start'] == 0) {
+            stopStream();
+            loadCamDevices(bkgCamSelect);
         } else {
-            console.log('No changes in the new template');
+            stopStream();
+        }
+    });
+    change(bkgCamSelect, () => {
+        if (bkgCamSelect.selectedIndex != -1) {
+            startCam(bkgCamSelect.options[bkgCamSelect.selectedIndex].value);
+        }
+    });
+    click(bkgScreenStart, () => {
+        if (radioState['bkg-screen-start'] == 0) {
+            stopStream();
+            startScreen();
+        } else {
+            stopStream();
+        }
+    });
+    click(bkgAudioStart, () => {
+        if (radioState['bkg-audio-start'] == 0) {
+            stopStream();
+            startAudioStream();
+            checkAudioEffect(bkgAudios);
+        } else {
+            stopStream();
+        }
+    });
+    toggleAudioEffect(bkgAudios);
+    click(bkgMicStart, () => {
+        if (radioState['bkg-mic-start'] == 0) {
+            stopStream();
+            startMicStream();
+            checkAudioEffect(bkgMics);
+        } else {
+            stopStream();
+        }
+    });
+    toggleAudioEffect(bkgMics);
+    function toggleAudioEffect(audioRadios) {
+        for (let i = 0; i < audioRadios.length; i++) {
+            let radio = audioRadios[i];
+            click(radio, () => {
+                if (radio.checked) {
+                    canvasDrawer.sendCommand("BkgPainter", "setAudioState", radio.dataset.effect);
+                }
+            });
         }
     }
-    loadTemplate(id) {
-        const template = this.getETemplate(id);
-        return MasterTemplate.fromJson(JSON.parse(window.atob(template)));
-    }
-    currentStoredTemplate(id) {
-        return this.existStoredTemplate(id) ? this.getETemplate(id) : '';
-    }
-    existStoredTemplate(id) {
-        return this.getETemplate(id) !== null;
-    }
-    setETemplate(id, eTemplate) {
-        localStorage.setItem(id + '-template', eTemplate);
-    }
-    getETemplate(id) {
-        return localStorage.getItem(id + '-template');
-    }
-    allModulesCount() {
-        const channels = this.masterTemplate.channels;
-        let count = 0;
-        for (let i = 0; i < channels.length; i++) {
-            if (channels[i]) {
-                count += this.moduleCount(i);
+    function checkAudioEffect(audioRadios) {
+        for (let i = 0; i < audioRadios.length; i++) {
+            let radio = audioRadios[i];
+            if (radio.checked) {
+                canvasDrawer.sendCommand("BkgPainter", "setAudioState", radio.dataset.effect);
             }
         }
-        return count;
     }
-    moduleCount(cIdx) {
-        const modules = this.masterTemplate.channels[cIdx].modules;
-        let count = 0;
-        for (let i = 0; i < modules.length; i++) {
-            if (modules[i]) {
-                count++;
+
+    // Filters
+    // Filter Animations
+    for (let i = 0; i < filters.length; i++) {
+        let filter = filters[i];
+        click(filter, () => {
+            if (filter.checked) {
+                canvasDrawer.sendCommand("FilterPainter", "setType", filter.dataset.filter);
+            } else {
+                canvasDrawer.sendCommand("FilterPainter", "setType", 'NONE');
             }
-        }
-        return count;
+        });
     }
+
+    // Texts
+    cacheInput(txtText, 'txtText', () => {
+        canvasDrawer.sendCommand("TextPainter", "setText", txtText.value);
+    });
+    cacheInput(txtFont, 'txtFont', () => {
+        canvasDrawer.sendCommand("TextPainter", "setTextFontType", txtFont.value);
+    });
+    cacheInput(txtStartColor, 'txtStartColor', () => {
+        canvasDrawer.sendCommand("TextPainter", "setStartColor", txtStartColor.value);
+    });
+    cacheInput(txtMidColor, 'txtMidColor', () => {
+        canvasDrawer.sendCommand("TextPainter", "setMidColor", txtMidColor.value);
+    });
+    cacheInput(txtEndColor, 'txtEndColor', () => {
+        canvasDrawer.sendCommand("TextPainter", "setEndColor", txtEndColor.value);
+    });
+    intCacheInput(txtSpeed, 'txtSpeed', () => {
+        let v = parseInt(txtSpeed.value);
+        txtSpeedValue.innerHTML = `Velocidad (${v}%)`;
+        canvasDrawer.sendCommand("TextPainter", "setTextSpeedPercentage", v);
+    });
+    intCacheInput(txtSize, 'txtSize', () => {
+        let v = parseInt(txtSize.value);
+        txtSizeValue.innerHTML = `Tamaño (${v}%)`;
+        if (v > 0) {
+            canvasDrawer.sendCommand("TextPainter", "setTextSizePercentage", v);
+        }
+    });
+    intCacheInput(txtPosition, 'txtPosition', () => {
+        let v = parseInt(txtPosition.value);
+        txtPositionValue.innerHTML = `Posicion (${v}%)`;
+        canvasDrawer.sendCommand("TextPainter", "setTextPosPercentage", v);
+    });
+
+    // Drivers
+    intCacheInput(driverFps, 'driverFps', () => {
+        let v = parseInt(driverFps.value);
+        driverFpsValue.innerHTML = `FPS (${v})`;
+        if (v > 0) {
+            canvasDrawer.setFps(v);
+        }
+    });
+    intCacheInput(displaySize, 'displaySize', () => {
+        let v = parseInt(displaySize.value);
+        displaySizeValue.innerHTML = `Tamaño (${v}%)`;
+        if (v > 0) {
+            canvasDrawer.sendCommand("BkgPainter", "setViewSize", v);
+        }
+    });
+    intCacheInput(displayPosX, 'displayPosX', () => {
+        let v = parseInt(displayPosX.value);
+        displayPosXValue.innerHTML = `Posicion horizontal (${v}%)`;
+        canvasDrawer.sendCommand("BkgPainter", "setViewX", displayPosX.value);
+    });
+    intCacheInput(displayPosY, 'displayPosY', () => {
+        let v = parseInt(displayPosY.value);
+        displayPosYValue.innerHTML = `Posicion vertical (${v}%)`;
+        canvasDrawer.sendCommand("BkgPainter", "setViewY", displayPosY.value);
+    });
+    intCacheInput(ledMatrixWidth, 'ledMatrixWidth', () => {
+        let ww = parseInt(ledMatrixWidth.value);
+        let hh = parseInt(ledMatrixHeight.value);
+        if (!isNaN(ww) && !isNaN(hh) && range(ww, 1, 400) && range(hh, 1, 300)) {
+            canvasDrawer.onMatrixResize(ww, hh);
+        }
+    });
+    intCacheInput(ledMatrixHeight, 'ledMatrixHeight', () => {
+        let ww = parseInt(ledMatrixWidth.value);
+        let hh = parseInt(ledMatrixHeight.value);
+        if (!isNaN(ww) && !isNaN(hh) && range(ww, 1, 400) && range(hh, 1, 300)) {
+            canvasDrawer.onMatrixResize(ww, hh);
+        }
+    });
+    canvasDrawer.init();
+    canvasDrawer.onMatrixResize(parseInt(ledMatrixWidth.value), parseInt(ledMatrixHeight.value));
+    workerInterval(paint, 5);
+    let initNodes = JSON.parse(await readTextFile("./templates.json"));
+
+    logI('./templates.json file loaded: ' + JSON.stringify(initNodes));
+    wsConnection.init(initNodes);
 }
-class MasterTemplate {
-    constructor() {
-        this.channels = [];
-    }
-    static fromChannels(numChannels) {
-        let template = new MasterTemplate();
-        for (let i = 0; i < numChannels; i++) {
-            template.channels[i] = new Channel();
-        }
-        return template;
-
-    }
-    static fromJson(json) {
-        let template = new MasterTemplate();
-        if (json && json.channels && json.channels.length) {
-            for (let i = 0, ii = 0; i < json.channels.length; i++) {
-                if (json.channels[i]) {
-                    template.channels[ii++] = Channel.fromJson(json.channels[i]);
+function setupToggleBehavior(myRadios) {
+    for (let x = 0; x < myRadios.length; x++) {
+        myRadios[x].onclick = function () {
+            let myGroupRadios = all('input[name="' + this.name + '"]');
+            let selectedIdx = -1;
+            for (let j = 0; j < myGroupRadios.length; j++) {
+                let myGroupRadio = myGroupRadios[j];
+                let myRadioBlock = id(myGroupRadio.id + '-container');
+                if (myGroupRadio == this) {
+                    selectedIdx = j;
+                }
+                if (myGroupRadio == this && radioState[this.name] != j) {
+                    myGroupRadio.checked = true;
+                    if (myRadioBlock != null) {
+                        show(myRadioBlock);
+                    }
+                } else {
+                    myGroupRadio.checked = false;
+                    if (myRadioBlock != null) {
+                        hide(myRadioBlock);
+                    }
                 }
             }
-        }
-        return template;
-
+            radioState[this.name] = radioState[this.name] != selectedIdx ? selectedIdx : -1;
+        };
     }
 }
-class Channel {
-    constructor() {
-        this.templateName = 'custom';
-        this.colorOrder = 'rgb'
-        this.modules = [];
+
+function setupSplash() {
+    const box = one("div.top-bar");
+    box.addEventListener("transitionend", () => {
+        document.body.classList.add("ledx-start")
+        canvasDrawer.onResize(ledXCanvas.getBoundingClientRect().width, ledXCanvas
+            .getBoundingClientRect().height);
+        canvasDrawer.onMatrixResize(parseInt(ledMatrixWidth.value), parseInt(ledMatrixHeight.value));
+    });
+    window.setTimeout(function () {
+        document.body.classList.remove("ledx-splash");
+    }, 1000);
+}
+
+function showModules() {
+    canvasDrawer.sendCommand("BorderPainter", "setEnabled", canvasModule.checked);
+    if (canvasModule.checked) {
+        show(canvasModuleX);
+        show(canvasModuleY);
+    } else {
+        hide(canvasModuleX);
+        hide(canvasModuleY);
     }
-    static fromJson(json) {
-        let channel = new Channel();
-        if (json.templateName) {
-            channel.templateName = json.templateName;
-        }
-        if (json.colorOrder) {
-            channel.colorOrder = json.colorOrder;
-        }
-        if (json.modules && json.modules.length) {
-            for (let i = 0, ii = 0; i < json.modules.length; i++) {
-                if (json.modules[i]) {
-                    channel.modules[ii++] = Module.fromJson(json.modules[i]);
-                }
+}
+
+
+// Worker
+var timeoutId = 0;
+var timeouts = {};
+var worker = new Worker("timeout-worker.js");
+worker.addEventListener("message", function (evt) {
+    var data = evt.data,
+        id = data.id,
+        fn = timeouts[id].fn,
+        args = timeouts[id].args;
+
+    fn.apply(null, args);
+});
+workerInterval = function (fn, delay) {
+    var args = Array.prototype.slice.call(arguments, 2);
+    timeoutId += 1;
+    delay = delay || 0;
+    var id = timeoutId;
+    timeouts[id] = {
+        fn: fn,
+        args: args
+    };
+    worker.postMessage({
+        command: "setInterval",
+        id: id,
+        timeout: delay
+    });
+    return id;
+};
+
+function paint() {
+    if (canvasDrawer.paint()) {
+        updateUi();
+    }
+}
+function updateUi() {
+    wsConnection.getNodes().forEach((driverNode, nodeId) => {
+        const driverInfoUi = idFrom(driversUi, nodeId + '-info');
+        if (driverNode) {
+            const newHtml = driverNode.toHtml(driverInfoUi.innerHTML);
+            if (!!newHtml) {
+                driverInfoUi.innerHTML = newHtml;
             }
         }
-        return channel;
+    });
+}
+
+function loadCamDevices(camSelect) {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+        logI("enumerateDevices() not supported.");
+        return;
+    }
+    navigator.mediaDevices.enumerateDevices()
+        .then(deviceInfos => {
+            clearSelect(camSelect);
+            if (deviceInfos.length > 0) {
+                const option = document.createElement('option');
+                option.value = 'NONE'
+                option.text = 'Ninguna';
+                camSelect.appendChild(option);
+            }
+            for (let i = 0, idx = 1; i < deviceInfos.length; i++) {
+                const deviceInfo = deviceInfos[i];
+                const option = document.createElement('option');
+                if (deviceInfo.kind === 'videoinput') {
+                    option.value = deviceInfo.deviceId;
+                    option.text = deviceInfo.label || `camera ${idx}`;
+                    camSelect.appendChild(option);
+                    idx++;
+                }
+            }
+        })
+        .catch(error => {
+            logI(`getUserMedia error: ${error}`);
+        });
+}
+
+async function startCam(camSelect) {
+    if (camSelect === 'NONE') {
+        stopStream();
+        return;
+    }
+    const constraints = window.constraints = {
+        audio: false,
+        video: {
+            deviceId: camSelect ? {
+                exact: camSelect
+            } : undefined,
+            width: {
+                "max": 360
+            },
+            height: {
+                "max": 360
+            }
+        }
+    };
+    try {
+        ledXVideo.srcObject = await navigator.mediaDevices.getUserMedia(constraints);
+        ledXVideo.onloadedmetadata = (e) => {
+            ledXVideo.play();
+            canvasDrawer.sendCommand('BkgPainter', 'setCameraScreen', ledXVideo);
+            canvasDrawer.sendCommand('BkgPainter', 'setCameraState', 'PLAY');
+            bkgScreenStart.checked = false
+            bkgAudioStart.checked = false
+            bkgMicStart.checked = false
+        };
+        ledXVideo.srcObject.oninactive = () => {
+            bkgCamStart.checked = false
+            canvasDrawer.sendCommand('BkgPainter', 'setCameraState', 'STOP');
+        };
+    } catch (e) {
+        console.log(e);
+        bkgCamStart.checked = false
     }
 }
 
-const ModuleDirection = {
-    ZIGZAGV_CB: 0,
-    ZIGZAGV_AD: 1,
-    ZIGZAGV_BC: 2,
-    ZIGZAGV_DA: 3,
-    ZIGZAGH_CB: 4,
-    ZIGZAGH_AD: 5,
-    ZIGZAGH_BC: 6,
-    ZIGZAGH_DA: 7,
+async function startScreen() {
+    const constraints = {
+        audio: false,
+        video: {
+            // cursor: "always",
+            width: {
+                "max": 360
+            },
+            height: {
+                "max": 360
+            }
+        }
+    };
+    try {
+        ledXVideo.srcObject = await navigator.mediaDevices.getDisplayMedia(constraints);
+        ledXVideo.onloadedmetadata = (e) => {
+            ledXVideo.play();
+            canvasDrawer.sendCommand('BkgPainter', 'setVideoScreen', ledXVideo);
+            canvasDrawer.sendCommand('BkgPainter', 'setScreenState', 'PLAY');
+            bkgCamStart.checked = false
+            bkgAudioStart.checked = false
+            bkgMicStart.checked = false
+        };
+        ledXVideo.srcObject.oninactive = () => {
+            bkgScreenStart.checked = false
+            canvasDrawer.sendCommand('BkgPainter', 'setScreenState', 'STOP');
+        };
+    } catch (e) {
+        console.log(e);
+        bkgScreenStart.checked = false
+    }
 }
 
-class Module {
-    constructor(x, y, w, h, d) {
-        this.x = parseInt(x);
-        this.y = parseInt(y);
-        this.w = parseInt(w);
-        this.h = parseInt(h);
-        this.d = parseInt(d);
+function isMobile() {
+    let check = false;
+    (function (a) { if (/(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|iris|kindle|lge |maemo|midp|mmp|mobile.+firefox|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|series(4|6)0|symbian|treo|up\.(browser|link)|vodafone|wap|windows ce|xda|xiino|android|ipad|playbook|silk/i.test(a) || /1207|6310|6590|3gso|4thp|50[1-6]i|770s|802s|a wa|abac|ac(er|oo|s\-)|ai(ko|rn)|al(av|ca|co)|amoi|an(ex|ny|yw)|aptu|ar(ch|go)|as(te|us)|attw|au(di|\-m|r |s )|avan|be(ck|ll|nq)|bi(lb|rd)|bl(ac|az)|br(e|v)w|bumb|bw\-(n|u)|c55\/|capi|ccwa|cdm\-|cell|chtm|cldc|cmd\-|co(mp|nd)|craw|da(it|ll|ng)|dbte|dc\-s|devi|dica|dmob|do(c|p)o|ds(12|\-d)|el(49|ai)|em(l2|ul)|er(ic|k0)|esl8|ez([4-7]0|os|wa|ze)|fetc|fly(\-|_)|g1 u|g560|gene|gf\-5|g\-mo|go(\.w|od)|gr(ad|un)|haie|hcit|hd\-(m|p|t)|hei\-|hi(pt|ta)|hp( i|ip)|hs\-c|ht(c(\-| |_|a|g|p|s|t)|tp)|hu(aw|tc)|i\-(20|go|ma)|i230|iac( |\-|\/)|ibro|idea|ig01|ikom|im1k|inno|ipaq|iris|ja(t|v)a|jbro|jemu|jigs|kddi|keji|kgt( |\/)|klon|kpt |kwc\-|kyo(c|k)|le(no|xi)|lg( g|\/(k|l|u)|50|54|\-[a-w])|libw|lynx|m1\-w|m3ga|m50\/|ma(te|ui|xo)|mc(01|21|ca)|m\-cr|me(rc|ri)|mi(o8|oa|ts)|mmef|mo(01|02|bi|de|do|t(\-| |o|v)|zz)|mt(50|p1|v )|mwbp|mywa|n10[0-2]|n20[2-3]|n30(0|2)|n50(0|2|5)|n7(0(0|1)|10)|ne((c|m)\-|on|tf|wf|wg|wt)|nok(6|i)|nzph|o2im|op(ti|wv)|oran|owg1|p800|pan(a|d|t)|pdxg|pg(13|\-([1-8]|c))|phil|pire|pl(ay|uc)|pn\-2|po(ck|rt|se)|prox|psio|pt\-g|qa\-a|qc(07|12|21|32|60|\-[2-7]|i\-)|qtek|r380|r600|raks|rim9|ro(ve|zo)|s55\/|sa(ge|ma|mm|ms|ny|va)|sc(01|h\-|oo|p\-)|sdk\/|se(c(\-|0|1)|47|mc|nd|ri)|sgh\-|shar|sie(\-|m)|sk\-0|sl(45|id)|sm(al|ar|b3|it|t5)|so(ft|ny)|sp(01|h\-|v\-|v )|sy(01|mb)|t2(18|50)|t6(00|10|18)|ta(gt|lk)|tcl\-|tdg\-|tel(i|m)|tim\-|t\-mo|to(pl|sh)|ts(70|m\-|m3|m5)|tx\-9|up(\.b|g1|si)|utst|v400|v750|veri|vi(rg|te)|vk(40|5[0-3]|\-v)|vm40|voda|vulc|vx(52|53|60|61|70|80|81|83|85|98)|w3c(\-| )|webc|whit|wi(g |nc|nw)|wmlb|wonu|x700|yas\-|your|zeto|zte\-/i.test(a.substr(0, 4))) check = true; })(navigator.userAgent || navigator.vendor || window.opera);
+    return check;
+}
+async function startMicStream() {
+    try {
+        let stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        const source = audioCtx.createMediaStreamSource(stream);
+        let analyzer = audioCtx.createAnalyser();
+        source.connect(analyzer);
+        analyzer.fftSize = 2 ** 8;
+        canvasDrawer.sendCommand('BkgPainter', 'setAudioStream', 'MIC', stream, analyzer);
+        canvasDrawer.sendCommand('BkgPainter', 'setAudioState', 'FREQUENCY');
+        bkgScreenStart.checked = false
+        bkgAudioStart.checked = false
+        bkgCamStart.checked = false
+    } catch (e) {
+        console.log(e);
+        bkgMicStart.checked = false;
+        canvasDrawer.sendCommand('BkgPainter', 'setAudioState', 'STOP');
     }
-    getPixelModule() {
-        if (this.d == ModuleDirection.ZIGZAGV_AD || this.d == ModuleDirection.ZIGZAGH_AD) {
-            return new Module(this.x, this.y, this.w, this.h, this.d);
-        } else if (this.d == ModuleDirection.ZIGZAGV_BC || this.d == ModuleDirection.ZIGZAGH_BC) {
-            return new Module(this.x + this.w - 1, this.y, -this.w, this.h, this.d);
-        } else if (this.d == ModuleDirection.ZIGZAGV_CB || this.d == ModuleDirection.ZIGZAGH_CB) {
-            return new Module(this.x, this.y + this.h - 1, this.w, -this.h, this.d);
-        } else if (this.d == ModuleDirection.ZIGZAGV_DA || this.d == ModuleDirection.ZIGZAGH_DA) {
-            return new Module(this.x + this.w - 1, this.y + this.h - 1, -this.w, -this.h, this.d);
+}
+
+let audioStream;
+async function startAudioStream() {
+    const constraints = {
+        audio: true,
+        video: {
+            width: {
+                "max": 360
+            },
+            height: {
+                "max": 360
+            }
+        }
+    };
+    try {
+        audioStream = await navigator.mediaDevices.getDisplayMedia(constraints);
+        const audioCtx = new AudioContext();
+        const analyzer = audioCtx.createAnalyser();
+        const mediaStream = new MediaStream(audioStream.getTracks());
+        const source = audioCtx.createMediaStreamSource(mediaStream);
+        source.connect(analyzer);
+        // How much data should we collect
+        analyzer.fftSize = 2 ** 6;
+        canvasDrawer.sendCommand('BkgPainter', 'setAudioStream', 'AUDIO', mediaStream, analyzer);
+        canvasDrawer.sendCommand('BkgPainter', 'setAudioState', 'FREQUENCY');
+        bkgScreenStart.checked = false
+        bkgCamStart.checked = false
+        bkgMicStart.checked = false
+
+        audioStream.oninactive = () => {
+            bkgAudioStart.checked = false
+            canvasDrawer.sendCommand('BkgPainter', 'setScreenState', 'STOP');
+        };
+    } catch (e) {
+        console.log(e);
+        bkgAudioStart.checked = false;
+        canvasDrawer.sendCommand('BkgPainter', 'setAudioState', 'STOP');
+    }
+}
+
+function stopStream() {
+    canvasDrawer.sendCommand('BkgPainter', 'stopStream');
+    if (ledXVideo.srcObject) {
+        const tracks = ledXVideo.srcObject.getTracks();
+        tracks.forEach(function (track) {
+            track.stop();
+        });
+        ledXVideo.srcObject = null;
+    }
+    if (audioStream) {
+        audioStream.getTracks().forEach(function (track) {
+            track.stop();
+        });
+        audioStream = null;
+
+    }
+}
+var globalMIdx = 0;
+function createModuleHtml(dId, cIdx, mIdx) {
+    const driver = wsConnection.getNodes().get(dId);
+    const template = driver.masterTemplate;
+    const channel = template.channels[cIdx];
+    const module = channel.modules[mIdx];
+    const dIdcIdmId = dId + '-c' + cIdx + '-m' + mIdx;
+    return '<div id="' + dIdcIdmId + '" style="border-bottom: solid 2px gray;">'
+        + '  <div style="display: flex;flex-flow: row-reverse; justify-content: space-between;">'
+        + '   <button style=\'margin:5px; background:darkred;border: 0;\' onclick=onRemoveModule(\'' + dId + '\',' + cIdx + ',' + mIdx + ') >Quitar</button>'
+        + '  </div>'
+        + '  <div>'
+        + '   <div>'
+        + '    <input type=\'radio\' id=\'' + dIdcIdmId + '-d0\' name=\'' + dIdcIdmId + '-d\' ' + checked(module.d, ModuleDirection.ZIGZAGV_CB) + ' onchange=onUpdateModule(\'' + dId + '\',' + cIdx + ',' + mIdx + ') />'
+        + '    <label for=\'' + dIdcIdmId + '-d0\' class=\'toggle arrow\' style=\'transform: scaleX(-1)\'> </label>'
+        + '    <input type=\'radio\' id=\'' + dIdcIdmId + '-d1\' name=\'' + dIdcIdmId + '-d\' ' + checked(module.d, ModuleDirection.ZIGZAGV_AD) + ' onchange=onUpdateModule(\'' + dId + '\',' + cIdx + ',' + mIdx + ') />'
+        + '    <label for=\'' + dIdcIdmId + '-d1\' class=\'toggle arrow\' style=\'transform: rotate(180deg) \'> </label>'
+        + '    <input type=\'radio\' id=\'' + dIdcIdmId + '-d2\' name=\'' + dIdcIdmId + '-d\' ' + checked(module.d, ModuleDirection.ZIGZAGV_BC) + ' onchange=onUpdateModule(\'' + dId + '\',' + cIdx + ',' + mIdx + ') />'
+        + '    <label for=\'' + dIdcIdmId + '-d2\' class=\'toggle arrow\' style=\'transform: rotate(180deg) scaleX(-1)\'> </label>'
+        + '    <input type=\'radio\' id=\'' + dIdcIdmId + '-d3\' name=\'' + dIdcIdmId + '-d\' ' + checked(module.d, ModuleDirection.ZIGZAGV_DA) + ' onchange=onUpdateModule(\'' + dId + '\',' + cIdx + ',' + mIdx + ') />'
+        + '    <label for=\'' + dIdcIdmId + '-d3\' class=\'toggle arrow\'> </label>'
+        + '    <input type=\'radio\' id=\'' + dIdcIdmId + '-d4\' name=\'' + dIdcIdmId + '-d\' ' + checked(module.d, ModuleDirection.ZIGZAGH_CB) + ' onchange=onUpdateModule(\'' + dId + '\',' + cIdx + ',' + mIdx + ') />'
+        + '    <label for=\'' + dIdcIdmId + '-d4\' class=\'toggle arrow\' style=\'transform: rotate(90deg) \'> </label>'
+        + '    <input type=\'radio\' id=\'' + dIdcIdmId + '-d5\' name=\'' + dIdcIdmId + '-d\' ' + checked(module.d, ModuleDirection.ZIGZAGH_AD) + ' onchange=onUpdateModule(\'' + dId + '\',' + cIdx + ',' + mIdx + ') />'
+        + '    <label for=\'' + dIdcIdmId + '-d5\' class=\'toggle arrow\' style=\'transform: rotate(90deg) scaleX(-1)\'> </label>'
+        + '    <input type=\'radio\' id=\'' + dIdcIdmId + '-d6\' name=\'' + dIdcIdmId + '-d\' ' + checked(module.d, ModuleDirection.ZIGZAGH_BC) + ' onchange=onUpdateModule(\'' + dId + '\',' + cIdx + ',' + mIdx + ') />'
+        + '    <label for=\'' + dIdcIdmId + '-d6\' class=\'toggle arrow\' style=\'transform: rotate(270deg) \'> </label>'
+        + '    <input type=\'radio\' id=\'' + dIdcIdmId + '-d7\' name=\'' + dIdcIdmId + '-d\' ' + checked(module.d, ModuleDirection.ZIGZAGH_DA) + ' onchange=onUpdateModule(\'' + dId + '\',' + cIdx + ',' + mIdx + ') />'
+        + '    <label for=\'' + dIdcIdmId + '-d7\' class=\'toggle arrow\' style=\'transform: rotate(270deg) scaleX(-1)\'> </label>'
+        + '   </div>'
+        + '   <div>'
+        + '    <label for=\'' + dIdcIdmId + '-x\'>X:</label>'
+        + '    <input id=\'' + dIdcIdmId + '-x\' type=\'number\' min=\'-40\' max=\'80\' value=\'' + module.x + '\' style=\'width: 35px\' onchange=onUpdateModule(\'' + dId + '\',' + cIdx + ',' + mIdx + ') >'
+        + '    <label for=\'' + dIdcIdmId + '-y\'>Y:</label>'
+        + '    <input id=\'' + dIdcIdmId + '-y\' type=\'number\' min=\'-30\' max=\'60\' value=\'' + module.y + '\' style=\'width: 35px\' onchange=onUpdateModule(\'' + dId + '\',' + cIdx + ',' + mIdx + ') >'
+        + '    <label for=\'' + dIdcIdmId + '-w\'>Ancho:</label>'
+        + '    <input id=\'' + dIdcIdmId + '-w\' type=\'number\' min=\'0\' max=\'128\' value=\'' + module.w + '\' style=\'width: 35px\' onchange=onUpdateModule(\'' + dId + '\',' + cIdx + ',' + mIdx + ') >'
+        + '    <label for=\'' + dIdcIdmId + '-h\'>Alto:</label>'
+        + '    <input id=\'' + dIdcIdmId + '-h\' type=\'number\' min=\'0\' max=\'64\' value=\'' + module.h + '\' style=\'width: 35px\' onchange=onUpdateModule(\'' + dId + '\',' + cIdx + ',' + mIdx + ') >'
+        + '   </div>'
+        + '  </div>'
+        + ' </div>';
+}
+function checked(t1, t2) {
+    return t1 === t2 ? 'checked' : '';
+}
+
+function onUpdateModule(dId, cIdx, mIdx) {
+    const dIdcIdmId = dId + '-c' + cIdx + '-m' + mIdx;
+
+    const radioD = radios(dIdcIdmId + '-d');
+    let d = 0;
+    for (i = 0; i < radioD.length; i++) {
+        if (radioD[i].checked) {
+            d = i;
+            break;
         }
     }
-    getBorderModule() {
-        if (this.d == ModuleDirection.ZIGZAGV_AD || this.d == ModuleDirection.ZIGZAGH_AD) {
-            return new Module(this.x, this.y, this.w, this.h, this.d);
-        } else if (this.d == ModuleDirection.ZIGZAGV_BC || this.d == ModuleDirection.ZIGZAGH_BC) {
-            return new Module(this.x + this.w, this.y, -this.w, this.h, this.d);
-        } else if (this.d == ModuleDirection.ZIGZAGV_CB || this.d == ModuleDirection.ZIGZAGH_CB) {
-            return new Module(this.x, this.y + this.h, this.w, -this.h, this.d);
-        } else if (this.d == ModuleDirection.ZIGZAGV_DA || this.d == ModuleDirection.ZIGZAGH_DA) {
-            return new Module(this.x + this.w, this.y + this.h, -this.w, -this.h, this.d);
+    const inX = id(dIdcIdmId + '-x');
+    const inY = id(dIdcIdmId + '-y');
+    const inW = id(dIdcIdmId + '-w');
+    const inH = id(dIdcIdmId + '-h');
+
+    const driver = wsConnection.getNodes().get(dId);
+    driver.updateModule(cIdx, mIdx, inX.value, inY.value, inW.value, inH.value, d);
+    showId(dId + '-save');
+}
+
+function onRemoveModule(dId, cIdx, mIdx) {
+    const dIdcIdmId = dId + '-c' + cIdx + '-m' + mIdx;
+    id(dIdcIdmId).remove();
+    const driver = wsConnection.getNodes().get(dId);
+    driver.removeModule(cIdx, mIdx);
+    showId(dId + '-save');
+}
+
+function createChannelHtml(dId, cIdx) {
+    const driver = wsConnection.getNodes().get(dId);
+    const template = driver.masterTemplate;
+    const channel = template.channels[cIdx];
+    const dIdcId = dId + '-c' + cIdx;
+    const channelHide = cIdx > 0 ? 'class=\'hide\'' : '';
+    const moduleHide = !selected(channel.templateName, 'custom') ? 'class=\'hide\'' : '';
+    let channelHtml = '<div id=\'' + dIdcId + '-container\' ' + channelHide + '>'
+        + '  <div>'
+        + '   <select id=\'' + dIdcId + '-t\' name=\'' + dIdcId + '-t\' onchange=onSelectTemplate(\'' + dId + '\',' + cIdx + ')'
+        + '         style=\'display:inline-flex;margin:10px\'>'
+        + '    <option value=\'pix600\' ' + selected(channel.templateName, 'pix600') + '>Pix 600</option>'
+        + '    <option value=\'pix900\' ' + selected(channel.templateName, 'pix900') + '>Pix 900</option>'
+        + '    <option value=\'custom\' ' + selected(channel.templateName, 'custom') + '>Personalizado</option>'
+        + '   </select>'
+        + '   <select id=\'' + dIdcId + '-order\' name=\'' + dIdcId + '-order\' onchange=onSelectOrder(\'' + dId + '\',' + cIdx + ') '
+        + '         style=\'display:inline-flex;margin:10px\'>'
+        + '    <option value=\'rgb\' ' + selected(channel.colorOrder, 'rgb') + '>RGB</option>'
+        + '    <option value=\'rbg\' ' + selected(channel.colorOrder, 'rbg') + '>RBG</option>'
+        + '    <option value=\'grb\' ' + selected(channel.colorOrder, 'grb') + '>GRB</option>'
+        + '    <option value=\'brg\' ' + selected(channel.colorOrder, 'brg') + '>BRG</option>'
+        + '   </select>'
+        + '  </div>'
+        + '  <div id=\'' + dIdcId + '-m\' ' + moduleHide + ' style=\'display:flex;flex-wrap:wrap;flex-direction:column\'>';
+
+    for (let mIdx = 0; mIdx < channel.modules.length; mIdx++) {
+        if (channel.modules[mIdx]) {
+            channelHtml += createModuleHtml(dId, cIdx, mIdx);
         }
     }
-    isVerticalDirection() {
-        return this.d == ModuleDirection.ZIGZAGV_AD || this.d == ModuleDirection.ZIGZAGV_CB
-            || this.d == ModuleDirection.ZIGZAGV_BC || this.d == ModuleDirection.ZIGZAGV_DA;
+    channelHtml += '  </div>'
+        + '  <button ' + moduleHide + ' id=\'' + dIdcId + '-m-add\' onclick=onAddModule(\'' + dId + '\',' + cIdx + ') >'
+        + '   Agregar modulo</button>'
+        + ' </div>';
+    return channelHtml;
+}
+
+function selected(t1, t2) {
+    return t1 === t2 ? 'selected' : '';
+}
+function newDefaultModule() {
+    return new Module(0, 0,
+        canvasDrawer.getMatrixWidth(), canvasDrawer.getMatrixHeight(), ModuleDirection.ZIGZAGV_CB);
+}
+function onSelectOrder(dId, cIdx) {
+    const dIdcId = dId + '-c' + cIdx;
+    const colorOrder = id(dIdcId + '-order').value;
+    const driver = wsConnection.getNodes().get(dId);
+    driver.setTemplateColorOrder(cIdx, colorOrder);
+    showId(dId + '-save');
+}
+
+function onSelectTemplate(dId, cIdx) {
+    const dIdcId = dId + '-c' + cIdx;
+    const templateName = id(dIdcId + '-t').value;
+    let mContainer = id(dIdcId + '-m');
+    let mAddButton = id(dIdcId + '-m-add');
+    if (templateName === 'custom') {
+        show(mContainer);
+        show(mAddButton);
+    } else {
+        hide(mContainer);
+        hide(mAddButton);
     }
-    static fromJson(json) {
-        return new Module(json.x, json.y, json.w, json.h, json.d);
+    const driver = wsConnection.getNodes().get(dId);
+    driver.setTemplateName(cIdx, templateName);
+    showId(dId + '-save');
+}
+
+function onAddModule(dId, cIdx) {
+    const driver = wsConnection.getNodes().get(dId);
+    driver.addModule(cIdx, globalMIdx, newDefaultModule());
+    const dIdcId = dId + '-c' + cIdx;
+    let mContainer = htmlToElement(createModuleHtml(dId, cIdx, globalMIdx));
+    id(dIdcId + '-m').appendChild(mContainer);
+    showId(dId + '-save');
+    globalMIdx++;
+}
+
+function htmlToElement(html) {
+    var template = document.createElement('template');
+    html = html.trim(); // Never return a text node of whitespace as the result
+    template.innerHTML = html;
+    return template.content.firstChild;
+}
+
+function createChannelsHtml(dId, dNode) {
+    let chansHtml = '<div style=\'border-bottom: solid 2px white;text-align: left;\'>';
+    const template = dNode.masterTemplate;
+    for (let cIdx = 0; cIdx < template.channels.length; cIdx++) {
+        const dIdcId = dId + '-c' + cIdx;
+        const checked = cIdx == 0 ? 'checked' : '';
+        chansHtml += '<input type=\'radio\' id=\'' + dIdcId + '\' name=\'' + dId + '-c\' ' + checked + ' />'
+            + '<label for=\'' + dIdcId + '\' class=\'toggle-tab\'> <p>Canal ' + (cIdx + 1) + '</p> </label>';
     }
+    chansHtml += '</div>'
+    for (let cIdx = 0; cIdx < template.channels.length; cIdx++) {
+        if (template.channels[cIdx]) {
+            chansHtml += createChannelHtml(dId, cIdx);
+        }
+    }
+    return chansHtml;
+}
+
+function createDriverHtml(dNode) {
+    const dId = dNode.id;
+    const dInfo = dNode.toHtml();
+    const dColor = dNode.color
+    return '<div id=\'' + dId + '\' style=\'display: flex;flex-direction: column;padding:5px;border-radius:10px;border-color:' + dColor + '\' class=\'border-connected\'>'
+        + '  <div style=\'display:flex;justify-content:space-between;\'>'
+        + '   <div style=\'color:deepskyblue\'>' + dId + '</div>'
+        + '   <button style=\'margin-right:10px;\' class=\'hide\' id=\'' + dId + '-save\' onclick=onSaveDriver(\'' + dId + '\') >Guardar</button>'
+        + '  </div>'
+        + '  <div id=\'' + dId + '-info\' style=\'text-align:left;font-size:small\'>' + dInfo + '</div>'
+        + createChannelsHtml(dId, dNode)
+        + '</div>';
+}
+
+function onSaveDriver(dId) {
+    const driver = wsConnection.getNodes().get(dId);
+    hideId(dId + '-save');
+    driver.saveDriver();
+}
+
+function uiNotification(deviceInfo, nodes) {
+    [...nodes.keys()].forEach((node) => {
+        const driverNode = nodes.get(node);
+        const driverUi = idFrom(driversUi, driverNode.id);
+        if (!driverUi) {
+            driversUi.innerHTML += createDriverHtml(driverNode);
+            setupToggleBehavior(all('input[name="' + driverNode.id + '-c"]'));
+        } else {
+            if (driverNode.isLost) {
+                driverUi.classList.remove('border-connected');
+                driverUi.classList.add('border-disconnected');
+            } else {
+                driverUi.classList.remove('border-disconnected');
+                driverUi.classList.add('border-connected');
+            }
+        }
+    });
+    if (!deviceInfo.update) {
+        return;
+    }
+    deviceInfo.update = false;
+
+    let driverMsg = ""
+    if (deviceInfo.driverStatus === NetworkStatus.CONNECTED) {
+        driverMsg =
+            '<b>Server Ip:</b> ' + deviceInfo.ip + ' </br></br > ' +
+            '<b>Ultima actualizacion:</b> ' + dateString + '</br>' +
+            '<b>Velocidad de subida:</b> ' + deviceInfo.driverUploadKbs + ' KB/s</br>' +
+            '<b>Velocidad de descarga:</b> ' + deviceInfo.driverDownloadKbs + ' KB/s</br>' +
+            '<b>Paquetes enviados:</b> ' + deviceInfo.driverMsgSent + '</br>' +
+            '<b>Paquetes recibidos:</b> ' + deviceInfo.driverMsgReceived + '</br></br>';
+    } else if (deviceInfo.driverStatus === NetworkStatus.CONNECTING) {
+        driverMsg =
+            "Intentando conectar al controlador...</br></br>";
+    } else {
+        driverMsg =
+            "No se ha encontrado ningun controlador disponible.<button class='btn-success' onclick='connectDriver()'>Reconectar</button>";
+    }
+    renderMsg.innerHTML = '<b>FPS:</b> ' + deviceInfo.fps + '</br>' +
+        '<b>Latencia del render:</b> ' + deviceInfo.fullLatency + ' ms';
+
+    if (deviceInfo.lastDriverMsg == driverMsg) {
+        return;
+    }
+    if (deviceInfo.driverStatus === NetworkStatus.CONNECTED) {
+        deviceStatus.classList.remove("error");
+        deviceStatus.classList.remove("warning");
+        deviceStatus.classList.add("success");
+        deviceStatus.innerHTML = 'Conectado';
+    } else if (deviceInfo.driverStatus === NetworkStatus.CONNECTING) {
+        deviceStatus.classList.add("warning");
+        deviceStatus.classList.remove("error");
+        deviceStatus.classList.remove("success");
+        deviceStatus.innerHTML = 'Conectando';
+        driverMsg =
+            "Intentando conectar al controlador...</br></br>";
+    } else {
+        deviceStatus.classList.add("error");
+        deviceStatus.classList.remove("warning");
+        deviceStatus.classList.remove("success");
+        deviceStatus.innerHTML = 'Desconectado';
+        driverMsg =
+            "No se ha encontrado ningun controlador disponible.<button class='btn-success' onclick='connectDriver()'>Reconectar</button>";
+    }
+    deviceInfo.lastDriverMsg = driverMsg;
+    deviceStatusMsg.innerHTML = driverMsg;
+}
+
+function connectDriver() {
+    wsConnection.wsConnect(0);
 })";
