@@ -918,6 +918,10 @@ function uiNotification(deviceInfo, nodes) {
 
     let driverMsg = ""
     if (deviceInfo.driverStatus === NetworkStatus.CONNECTED) {
+        const t = new Date(deviceInfo.lastDriverMsgTime);
+        var dateString = deviceInfo.lastDriverMsgTime == 0 ?
+            "Ninguna" :
+            t.getUTCFullYear() + "/" + (t.getMonth() + 1) + "/" + t.getDate() + " " + t.getHours() + ":" + t.getMinutes() + ":" + t.getSeconds();
         driverMsg =
             '<b>Server Ip:</b> ' + deviceInfo.ip + ' </br></br > ' +
             '<b>Ultima actualizacion:</b> ' + dateString + '</br>' +
