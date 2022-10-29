@@ -1,9 +1,9 @@
 const char canvas_js_h[] PROGMEM = R"(class CanvasInfo {
     constructor(ledXCanvas, w, h) {
         this.myCanvas = ledXCanvas;
-        this.myCtx = ledXCanvas.getContext('2d');
+        this.myCtx = ledXCanvas.getContext('2d', { willReadFrequently: true });
         this.smallCanvas = document.createElement('canvas');
-        this.smallCtx = this.smallCanvas.getContext('2d');
+        this.smallCtx = this.smallCanvas.getContext('2d', { willReadFrequently: true });
         this.smallCtx.width = 1;
         this.smallCtx.height = 1;
         this.setSize(w, h);
@@ -54,8 +54,12 @@ const char canvas_js_h[] PROGMEM = R"(class CanvasInfo {
     }
     copyCanvas() {
         if (this.matrixH && this.matrixW && this.matrixH > 0 && this.matrixW > 0) {
+            // let a = performance.now();
             this.smallCtx.drawImage(this.myCanvas, 0, 0);
+            // console.log("drawImage: `"+(performance.now()-a));
+            let a = performance.now();
             this.showData = this.smallCtx.getImageData(0, 0, this.matrixW, this.matrixH).data;
+            // console.log("getImageData: " + (performance.now() - a));
         }
     }
 }
@@ -176,7 +180,7 @@ class BkgPainter {
     paint(canvasInfo) {
         if (this.colorState === "SOLID") {
             if (this.animate === true) {
-                this.animatePercentage = (this.animatePercentage + 2) % 360;
+                this.animatePercentage = (this.animatePercentage + 1) % 360;
                 let hsl = RGBtoHSL(HEXToRGB(this.startColor));
                 let rgb = HSLtoRGBWithDeltaHue(hsl, this.animatePercentage);
                 canvasInfo.myCtx.fillStyle = RGBToHEX(rgb);
@@ -189,7 +193,7 @@ class BkgPainter {
             let grd =
                 canvasInfo.myCtx.createLinearGradient(0, min, 0, 0);
             if (this.animate === true) {
-                this.animatePercentage = (this.animatePercentage + 3) % 360;
+                this.animatePercentage = (this.animatePercentage + 1) % 360;
                 let hsl = RGBtoHSL(HEXToRGB(this.startColor));
                 let rgb = HSLtoRGBWithDeltaHue(hsl, this.animatePercentage);
                 grd.addColorStop(0, RGBToHEX(rgb));
@@ -206,7 +210,7 @@ class BkgPainter {
             let grd =
                 canvasInfo.myCtx.createRadialGradient(canvasInfo.w / 2, canvasInfo.h / 2, min / 10, canvasInfo.w / 2, canvasInfo.h / 2, min);
             if (this.animate === true) {
-                this.animatePercentage = (this.animatePercentage + 3) % 360;
+                this.animatePercentage = (this.animatePercentage + 1) % 360;
                 let hsl = RGBtoHSL(HEXToRGB(this.startColor));
                 let rgb = HSLtoRGBWithDeltaHue(hsl, this.animatePercentage);
                 grd.addColorStop(0, RGBToHEX(rgb));
@@ -843,7 +847,7 @@ class FPS {
         this.avgLatency = this.avgLatency > 0 ? (this.avgLatency + this.latency) / 2 : this.latency;
         this.frameRender++;
         this.cTime = performance.now();
-        if (this.cTime - this.tTime > 1000) {
+        if (performance.now() - this.tTime > 1000) {
             this.deviceInfo.driverStatus = deviceInfo.status;
             this.deviceInfo.fps = this.frameRender;
             this.deviceInfo.driverUploadKbs = (deviceInfo.uploadBytes / 1024).toFixed(3);
@@ -886,7 +890,7 @@ class CanvasDrawer {
             break;
         }
     }
-    setFps(fps){
+    setFps(fps) {
         this.fps = fps;
     }
     sendCommand(command, key, value, value2, value3) {
@@ -915,6 +919,7 @@ class CanvasDrawer {
         const timeSpent = newTick - this.canvasInfo.lastTick;
         const framesPassed = timeSpent / (1000 / this.fps);
         if (framesPassed > .95) {
+            let a = performance.now();
             this.canvasInfo.tick(newTick, framesPassed);
             for (let painter of this.painters) {
                 painter.paint(this.canvasInfo, newTick);
@@ -929,11 +934,13 @@ class CanvasDrawer {
                 }
                 this.uiNotification(this.fpsStats.tick(this.wsConnection.getDeviceInfo()), this.wsConnection.getNodes());
             });
+            sss = performance.now();
             return true;
         }
         return false;
     }
 }
+var sss = 0;
 
 function pixelsToMsg(pixelsD, matrixW, matrixH, driver) {
     if (pixelsD.length == 0) {
@@ -949,7 +956,7 @@ function pixelsToMsg(pixelsD, matrixW, matrixH, driver) {
                 continue;
             }
             let templateInfo = driver.masterTemplate.channels[k];
-            let a=-1,b=-1
+            let a = -1, b = -1
             for (let m = 0; m < templateInfo.modules.length; m++) {
                 if (!templateInfo.modules[m]) {
                     continue;
@@ -961,10 +968,10 @@ function pixelsToMsg(pixelsD, matrixW, matrixH, driver) {
                         for (let row = 0; module.h < 0 ? row > module.h : row < module.h; module.h < 0 ? row-- : row++) {
                             let i = col % 2 == 0 ? module.y + row : module.y + module.h - row + (module.h < 0 ? 1 : -1);
                             let j = col + module.x;
-                            if(a==i&&b==j){
-                                console.log('repeated: '+i+'---'+j);
+                            if (a == i && b == j) {
+                                console.log('repeated: ' + i + '---' + j);
                             }
-                            a=i,b=j;
+                            a = i, b = j;
                             if (isInMatrix(i, j, matrixW, matrixH)) {
                                 const matrixIdx = getMatrixIdx(i, j, matrixW);
                                 const colorOrder = templateInfo.colorOrder;
@@ -1037,5 +1044,4 @@ function setBlankColor(bin, binIdx) {
     bin[binIdx++] = 0;
     bin[binIdx++] = 0;
     return binIdx;
-}
-)";
+})";

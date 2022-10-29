@@ -1,6 +1,4 @@
-const char ledx3_html_h[] PROGMEM = R"(
-
-<!DOCTYPE html>
+const char ledx3_html_h[] PROGMEM = R"(<!DOCTYPE html>
 <html>
 
 <head>
@@ -33,6 +31,14 @@ const char ledx3_html_h[] PROGMEM = R"(
                         <h5 id="device-status" class="error">Desconectado</h5>
                         <p id="device-status-msg" style="text-align: left">No se ha encontrado ningun controlador
                             disponible.</p>
+
+                        <div class="range">
+                            <h5 id="driver-fps-value">FPS (20)</h5>
+                            <input id="driver-fps" type="range" value="20" min="10" max="35">
+                        </div>
+                        <p id="render-msg" style="text-align: left">
+                            <b>FPS:</b>0</br><b>Latencia del render:</b>0 ms
+                        </p>
                     </div>
                 </div>
                 <div>
@@ -47,13 +53,6 @@ const char ledx3_html_h[] PROGMEM = R"(
                             <input id="led-matrix-width" type="number" min="1" max="400" value="50">
                             <p>Alto</p>
                             <input id="led-matrix-height" type="number" min="1" max="300" value="15">
-                        </div>
-                        <div class="menu-wiring">
-                            <h5>FPS </h5>
-                            <div class="range">
-                                <h5 id="driver-fps-value">FPS (23)</h5>
-                                <input id="driver-fps" type="range" value="22" min="10" max="30">
-                            </div>
                         </div>
                         <div class="menu-wiring">
                             <h5>Controladores </h5>
@@ -281,11 +280,11 @@ const char ledx3_html_h[] PROGMEM = R"(
                         </div>
                         <div class="control-blocks" style="width: 193px;">
                             <label id="txt-size-value">Tamaño (100%)</label>
-                            <input id="txt-size" type="range" value="100">
+                            <input id="txt-size" type="range" min="1" value="100">
                             <label id="txt-speed-value">Velocidad (30%)</label>
-                            <input id="txt-speed" type="range" value="30">
+                            <input id="txt-speed" type="range" min="1" value="30">
                             <label id="txt-position-value">Posicion (100%)</label>
-                            <input id="txt-position" type="range" value="100">
+                            <input id="txt-position" type="range" min="1" value="100">
                         </div>
                     </div>
                 </div>
@@ -329,5 +328,4 @@ const char ledx3_html_h[] PROGMEM = R"(
     </script>
 </body>
 
-</html>
-)";
+</html>)";

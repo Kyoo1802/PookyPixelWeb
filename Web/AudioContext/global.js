@@ -35,11 +35,76 @@ function click(element, fn) {
 function input(element, fn) {
     element.addEventListener('input', e => fn(e));
 }
+function cacheRadio(element, cacheKey, radioValue, fn) {
+    if (loadCache(cacheKey) == radioValue) {
+        element.checked = true;
+        fn();
+    }
+    element.addEventListener('input', e => {
+        fn(e);
+        updateCache(cacheKey, radioValue);
+    });
+}
+function cacheCheck(element, cacheKey, fn) {
+    if (initBoolCache(element, cacheKey)) {
+        fn();
+    }
+    element.addEventListener('input', e => {
+        fn(e);
+        updateCache(cacheKey, element.checked);
+    });
+}
+function cacheInput(element, cacheKey, fn) {
+    if (initCache(element, cacheKey)) {
+        fn();
+    }
+    element.addEventListener('input', e => {
+        fn(e);
+        updateCache(cacheKey, element.value);
+    });
+}
+function intCacheInput(element, cacheKey, fn) {
+    if (initIntCache(element, cacheKey)) {
+        fn();
+    }
+    element.addEventListener('input', e => {
+        fn(e);
+        updateCache(cacheKey, element.value);
+    });
+}
 function change(element, fn) {
     element.addEventListener('change', e => fn(e));
 }
 function onLoad(fn) {
     window.addEventListener('load', e => fn(e));
+}
+function initBoolCache(element, cacheKey) {
+    if (loadCache(cacheKey) !== null) {
+        let v = loadCache(cacheKey);
+        element.checked = v == true || v === 'true';
+        return true;
+    }
+    return false;
+}
+function initIntCache(element, cacheKey) {
+    if (loadCache(cacheKey) !== null) {
+        element.value = parseInt(loadCache(cacheKey));
+        return true;
+    }
+    return false;
+}
+function initCache(element, cacheKey) {
+    if (loadCache(cacheKey) !== null) {
+        element.value = loadCache(cacheKey);
+        return true;
+    }
+    return false;
+}
+function updateCache(cacheKey, value) {
+    localStorage.setItem(cacheKey, value);
+}
+function loadCache(cacheKey) {
+    return localStorage.getItem(cacheKey);
 }
 function hideId(idC) {
     hide(id(idC));
@@ -79,12 +144,29 @@ function reviver(key, value) {
     }
     return value;
 }
-function readTextFile(file, callback) {
-    var rawFile = new XMLHttpRequest();
-    rawFile.overrideMimeType("application/json");
-    rawFile.open("GET", file, false);
-    rawFile.send(null);
-    return rawFile.responseText;
+function readTextFile(url) {
+    return new Promise(function (resolve, reject) {
+        let xhr = new XMLHttpRequest();
+        xhr.overrideMimeType("application/json");
+        xhr.open("GET", url);
+        xhr.onload = function () {
+            if (this.status >= 200 && this.status < 300) {
+                resolve(xhr.response);
+            } else {
+                reject({
+                    status: this.status,
+                    statusText: xhr.statusText
+                });
+            }
+        };
+        xhr.onerror = function () {
+            reject({
+                status: this.status,
+                statusText: xhr.statusText
+            });
+        };
+        xhr.send();
+    });
 }
 function range(x, a, b) {
     return x >= a && x <= b;
@@ -135,6 +217,7 @@ const ledMatrixWidth = id("led-matrix-width");
 const ledMatrixHeight = id("led-matrix-height");
 const deviceStatus = id("device-status");
 const deviceStatusMsg = id("device-status-msg");
+const renderMsg = id("render-msg");
 const driversUi = id("drivers");
 
 let radioState = {};
@@ -142,32 +225,35 @@ let wsConnection = new WsConnection();
 let canvasDrawer = new CanvasDrawer(ledXCanvas, ledXCanvas.getBoundingClientRect().width,
     ledXCanvas.getBoundingClientRect().height, wsConnection, uiNotification);
 onLoad(() => {
-    let initNodes = JSON.parse(readTextFile("./templates.json"));
+    loadComponents();
+});
+
+async function loadComponents() {
     setupToggleBehavior(myRadios);
     setupSplash();
 
     // Background
-    input(bkgStartColor, () => {
+    cacheInput(bkgStartColor, 'bkgStartColor', () => {
         canvasDrawer.sendCommand("BkgPainter", "setStartColor", bkgStartColor.value);
     });
-    input(bkgEndColor, () => {
+    cacheInput(bkgEndColor, 'bkgEndColor', () => {
         canvasDrawer.sendCommand("BkgPainter", "setEndColor", bkgEndColor.value);
     });
-    input(bkgAnimate, () => {
+    cacheCheck(bkgAnimate, 'bkgAnimate', () => {
         canvasDrawer.sendCommand("BkgPainter", "setAnimate", bkgAnimate.checked);
     });
-    input(bkgSolid, () => {
-        canvasDrawer.sendCommand("BkgPainter", "setColorState", "SOLID");
+    cacheRadio(bkgSolid, 'bkg-color', 'SOLID', () => {
+        canvasDrawer.sendCommand("BkgPainter", "setColorState", 'SOLID');
         hide(bkgEndColor);
         hide(bkgEndColorLabel);
     });
-    input(bkgRadial, () => {
-        canvasDrawer.sendCommand("BkgPainter", "setColorState", "RADIAL");
+    cacheRadio(bkgRadial, 'bkg-color', 'RADIAL', () => {
+        canvasDrawer.sendCommand("BkgPainter", "setColorState", 'RADIAL');
         show(bkgEndColor);
         show(bkgEndColorLabel);
     });
-    input(bkgLineal, () => {
-        canvasDrawer.sendCommand("BkgPainter", "setColorState", "LINEAL");
+    cacheRadio(bkgLineal, 'bkg-color', 'LINEAL', () => {
+        canvasDrawer.sendCommand("BkgPainter", "setColorState", 'LINEAL');
         show(bkgEndColor);
         show(bkgEndColorLabel);
     });
@@ -245,89 +331,86 @@ onLoad(() => {
     }
 
     // Texts
-    input(txtText, () => {
+    cacheInput(txtText, 'txtText', () => {
         canvasDrawer.sendCommand("TextPainter", "setText", txtText.value);
     });
-    change(txtFont, () => {
+    cacheInput(txtFont, 'txtFont', () => {
         canvasDrawer.sendCommand("TextPainter", "setTextFontType", txtFont.value);
     });
-    input(txtStartColor, () => {
+    cacheInput(txtStartColor, 'txtStartColor', () => {
         canvasDrawer.sendCommand("TextPainter", "setStartColor", txtStartColor.value);
     });
-    input(txtMidColor, () => {
+    cacheInput(txtMidColor, 'txtMidColor', () => {
         canvasDrawer.sendCommand("TextPainter", "setMidColor", txtMidColor.value);
     });
-    input(txtEndColor, () => {
+    cacheInput(txtEndColor, 'txtEndColor', () => {
         canvasDrawer.sendCommand("TextPainter", "setEndColor", txtEndColor.value);
     });
-    input(txtSpeed, () => {
+    intCacheInput(txtSpeed, 'txtSpeed', () => {
         let v = parseInt(txtSpeed.value);
         txtSpeedValue.innerHTML = `Velocidad (${v}%)`;
         canvasDrawer.sendCommand("TextPainter", "setTextSpeedPercentage", v);
     });
-    input(txtSize, () => {
+    intCacheInput(txtSize, 'txtSize', () => {
         let v = parseInt(txtSize.value);
         txtSizeValue.innerHTML = `Tamaño (${v}%)`;
         if (v > 0) {
             canvasDrawer.sendCommand("TextPainter", "setTextSizePercentage", v);
         }
     });
-    input(txtPosition, () => {
+    intCacheInput(txtPosition, 'txtPosition', () => {
         let v = parseInt(txtPosition.value);
         txtPositionValue.innerHTML = `Posicion (${v}%)`;
         canvasDrawer.sendCommand("TextPainter", "setTextPosPercentage", v);
     });
 
     // Drivers
-    input(driverFps, () => {
+    intCacheInput(driverFps, 'driverFps', () => {
         let v = parseInt(driverFps.value);
         driverFpsValue.innerHTML = `FPS (${v})`;
         if (v > 0) {
             canvasDrawer.setFps(v);
         }
     });
-    input(displaySize, () => {
+    intCacheInput(displaySize, 'displaySize', () => {
         let v = parseInt(displaySize.value);
         displaySizeValue.innerHTML = `Tamaño (${v}%)`;
         if (v > 0) {
             canvasDrawer.sendCommand("BkgPainter", "setViewSize", v);
         }
     });
-    input(displayPosX, () => {
+    intCacheInput(displayPosX, 'displayPosX', () => {
         let v = parseInt(displayPosX.value);
         displayPosXValue.innerHTML = `Posicion horizontal (${v}%)`;
         canvasDrawer.sendCommand("BkgPainter", "setViewX", displayPosX.value);
     });
-    input(displayPosY, () => {
+    intCacheInput(displayPosY, 'displayPosY', () => {
         let v = parseInt(displayPosY.value);
         displayPosYValue.innerHTML = `Posicion vertical (${v}%)`;
         canvasDrawer.sendCommand("BkgPainter", "setViewY", displayPosY.value);
     });
-    input(ledMatrixWidth, () => {
+    intCacheInput(ledMatrixWidth, 'ledMatrixWidth', () => {
         let ww = parseInt(ledMatrixWidth.value);
         let hh = parseInt(ledMatrixHeight.value);
         if (!isNaN(ww) && !isNaN(hh) && range(ww, 1, 400) && range(hh, 1, 300)) {
             canvasDrawer.onMatrixResize(ww, hh);
-            localStorage.setItem('matrix-w', ww);
         }
     });
-    input(ledMatrixHeight, () => {
+    intCacheInput(ledMatrixHeight, 'ledMatrixHeight', () => {
         let ww = parseInt(ledMatrixWidth.value);
         let hh = parseInt(ledMatrixHeight.value);
         if (!isNaN(ww) && !isNaN(hh) && range(ww, 1, 400) && range(hh, 1, 300)) {
             canvasDrawer.onMatrixResize(ww, hh);
-            localStorage.setItem('matrix-h', hh);
         }
     });
-    if (localStorage.getItem('matrix-w') !== null && localStorage.getItem('matrix-h') !== null) {
-        ledMatrixWidth.value = parseInt(localStorage.getItem('matrix-w'));
-        ledMatrixHeight.value = parseInt(localStorage.getItem('matrix-h'));
-    }
     canvasDrawer.init();
     canvasDrawer.onMatrixResize(parseInt(ledMatrixWidth.value), parseInt(ledMatrixHeight.value));
     workerInterval(paint, 5);
+    let initNodes = JSON.parse(await readTextFile("./templates.json"));
+
+    logI('./templates.json file loaded: ' + JSON.stringify(initNodes));
     wsConnection.init(initNodes);
-});
+}
 function setupToggleBehavior(myRadios) {
     for (let x = 0; x < myRadios.length; x++) {
         myRadios[x].onclick = function () {
@@ -429,7 +512,7 @@ function updateUi() {
 
 function loadCamDevices(camSelect) {
     if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
-        console.log("enumerateDevices() not supported.");
+        logI("enumerateDevices() not supported.");
         return;
     }
     navigator.mediaDevices.enumerateDevices()
@@ -831,6 +914,8 @@ function uiNotification(deviceInfo, nodes) {
     if (!deviceInfo.update) {
         return;
     }
+    deviceInfo.update = false;
+
     let driverMsg = ""
     if (deviceInfo.driverStatus === NetworkStatus.CONNECTED) {
         driverMsg =
@@ -847,7 +932,10 @@ function uiNotification(deviceInfo, nodes) {
         driverMsg =
             "No se ha encontrado ningun controlador disponible.<button class='btn-success' onclick='connectDriver()'>Reconectar</button>";
     }
-    if(deviceInfo.lastDriverMsg == driverMsg){
+    renderMsg.innerHTML = '<b>FPS:</b> ' + deviceInfo.fps + '</br>' +
+        '<b>Latencia del render:</b> ' + deviceInfo.fullLatency + ' ms';
+
+    if (deviceInfo.lastDriverMsg == driverMsg) {
         return;
     }
     if (deviceInfo.driverStatus === NetworkStatus.CONNECTED) {
@@ -871,9 +959,7 @@ function uiNotification(deviceInfo, nodes) {
             "No se ha encontrado ningun controlador disponible.<button class='btn-success' onclick='connectDriver()'>Reconectar</button>";
     }
     deviceInfo.lastDriverMsg = driverMsg;
-    deviceStatusMsg.innerHTML = driverMsg + '<b>FPS:</b> ' + deviceInfo.fps + '</br>' +
-        '<b>Latencia del render:</b> ' + deviceInfo.fullLatency + ' ms';
-    deviceInfo.update = false;
+    deviceStatusMsg.innerHTML = driverMsg;
 }
 
 function connectDriver() {

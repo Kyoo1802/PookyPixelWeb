@@ -1,5 +1,4 @@
-const char connection_js_h[] PROGMEM = R"(
-const NetworkStatus = {
+const char connection_js_h[] PROGMEM = R"(const NetworkStatus = {
     CONNECTED: 0,
     CONNECTING: 1,
     DISCONNECTED: 2,
@@ -26,14 +25,17 @@ class WsConnection {
     // which contains a string of pixels.
     init(initNodes) {
         this.initNodes = initNodes;
-        setTimeout(() => {
-            this.wsConnect();
-        }, 3000);
-        //        this.createFakeNode();
+         setTimeout(() => {
+             this.wsConnect();
+         }, 3000);
+         // this.createFakeNode();
     }
     createFakeNode() {
-        let newDriver = new Driver({ id: 'Ledx-1001', ip: '192.168.1.1', type: 'NODE', channels: 2, leds: 900 }, this);
+        let newDriver = new Driver({ command: "IDENTIFY", id: 'Ledx-1001', ip: '192.168.1.1', type: 'DRIVER', state: 'READY', channels: 2, leds: 1000 }, this);
         this.nodes.set(newDriver.id, newDriver);
+    }
+    isFake() {
+        return !!this.nodes.get('Ledx-1001');
     }
     wsConnect(retries = 2) {
         var self = this;
@@ -50,6 +52,9 @@ class WsConnection {
             };
             this.ws.onclose = function (e) {
                 logI("Network Closed!");
+                if (self.isFake()) {
+                    return;
+                }
                 self.deviceInfo.status = NetworkStatus.DISCONNECTED;
                 [...self.nodes.keys()].forEach((node) => {
                     self.nodes.get(node).isLost = true;
@@ -62,6 +67,9 @@ class WsConnection {
             };
             this.ws.onerror = function (e) {
                 logI("Websocket unexpected error: " + JSON.stringify(e));
+                if (self.isFake()) {
+                    return;
+                }
                 self.handleRcvdMsg({
                     id: LEDX_NAME,
                     command: 'LOST',
@@ -130,24 +138,23 @@ class WsConnection {
 
 class Driver {
     constructor(metadata, ws) {
-        logI('Starting driver.');
         this.ws = ws;
         this.id = metadata.id;
         this.metadata = metadata;
         if (metadata.template) {
-            logI('Using template from driver.');
+            logI('Initial template loaded from: Driver.');
             this.masterTemplate = MasterTemplate.fromJson(JSON.parse(window.atob(metadata.template)));
             globalMIdx += this.allModulesCount();
         } else if (this.existStoredTemplate(this.id)) {
-            logI('Using template from local storage: ' + this.id);
+            logI('Initial template loaded from: Local storage: ' + this.id);
             this.masterTemplate = this.loadTemplate(this.id);
             globalMIdx += this.allModulesCount();
-        } else if (!this.masterTemplate || (this.masterTemplate.channels && metadata.channels != this.masterTemplate.channels.length)) {
-            logI('Using template default.');
+        }
+
+        if (!this.masterTemplate || !this.masterTemplate.channels || metadata.channels != this.masterTemplate.channels.length) {
+            logI('Initial template loaded from: Code.');
             this.masterTemplate = MasterTemplate.fromChannels(metadata.channels);
             globalMIdx += this.allModulesCount();
-        } else {
-            logI('Template not initialized.');
         }
         this.isLost = false;
         this.color = Math.floor(Math.random() * 16777215).toString(16);
@@ -316,7 +323,7 @@ class Module {
             return new Module(this.x + this.w - 1, this.y, -this.w, this.h, this.d);
         } else if (this.d == ModuleDirection.ZIGZAGV_CB || this.d == ModuleDirection.ZIGZAGH_CB) {
             return new Module(this.x, this.y + this.h - 1, this.w, -this.h, this.d);
-        } else {
+        } else if (this.d == ModuleDirection.ZIGZAGV_DA || this.d == ModuleDirection.ZIGZAGH_DA) {
             return new Module(this.x + this.w - 1, this.y + this.h - 1, -this.w, -this.h, this.d);
         }
     }
@@ -327,7 +334,7 @@ class Module {
             return new Module(this.x + this.w, this.y, -this.w, this.h, this.d);
         } else if (this.d == ModuleDirection.ZIGZAGV_CB || this.d == ModuleDirection.ZIGZAGH_CB) {
             return new Module(this.x, this.y + this.h, this.w, -this.h, this.d);
-        } else {
+        } else if (this.d == ModuleDirection.ZIGZAGV_DA || this.d == ModuleDirection.ZIGZAGH_DA) {
             return new Module(this.x + this.w, this.y + this.h, -this.w, -this.h, this.d);
         }
     }
@@ -338,5 +345,4 @@ class Module {
     static fromJson(json) {
         return new Module(json.x, json.y, json.w, json.h, json.d);
     }
-}
-)";
+})";

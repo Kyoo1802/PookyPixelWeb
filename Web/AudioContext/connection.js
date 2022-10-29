@@ -25,9 +25,9 @@ class WsConnection {
     // which contains a string of pixels.
     init(initNodes) {
         this.initNodes = initNodes;
-        setTimeout(() => {
-            this.wsConnect();
-        }, 3000);
+        // setTimeout(() => {
+        //     this.wsConnect();
+        // }, 3000);
          this.createFakeNode();
     }
     createFakeNode() {
@@ -142,17 +142,17 @@ class Driver {
         this.id = metadata.id;
         this.metadata = metadata;
         if (metadata.template) {
-            logI('Using template from driver.');
+            logI('Initial template loaded from: Driver.');
             this.masterTemplate = MasterTemplate.fromJson(JSON.parse(window.atob(metadata.template)));
             globalMIdx += this.allModulesCount();
         } else if (this.existStoredTemplate(this.id)) {
-            logI('Using template from local storage: ' + this.id);
+            logI('Initial template loaded from: Local storage: ' + this.id);
             this.masterTemplate = this.loadTemplate(this.id);
             globalMIdx += this.allModulesCount();
         }
 
         if (!this.masterTemplate || !this.masterTemplate.channels || metadata.channels != this.masterTemplate.channels.length) {
-            logI('Using template default.');
+            logI('Initial template loaded from: Code.');
             this.masterTemplate = MasterTemplate.fromChannels(metadata.channels);
             globalMIdx += this.allModulesCount();
         }
