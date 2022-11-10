@@ -592,10 +592,6 @@ button {
   padding: 5px;
 }
 
-.glow {
-  animation: glow 10s linear infinite;
-}
-
 .main {
   position: relative;
   transition: all 1s;

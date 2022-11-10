@@ -219,6 +219,7 @@ const deviceStatus = id("device-status");
 const deviceStatusMsg = id("device-status-msg");
 const renderMsg = id("render-msg");
 const driversUi = id("drivers");
+const localVideo = id("local-video");
 
 let radioState = {};
 let wsConnection = new WsConnection();
@@ -269,6 +270,9 @@ async function loadComponents() {
         if (bkgCamSelect.selectedIndex != -1) {
             startCam(bkgCamSelect.options[bkgCamSelect.selectedIndex].value);
         }
+    });
+    change(localVideo, (e) => {
+        startVideo(URL.createObjectURL(localVideo.files[0]));
     });
     click(bkgScreenStart, () => {
         if (radioState['bkg-screen-start'] == 0) {
@@ -382,12 +386,12 @@ async function loadComponents() {
     intCacheInput(displayPosX, 'displayPosX', () => {
         let v = parseInt(displayPosX.value);
         displayPosXValue.innerHTML = `Posicion horizontal (${v}%)`;
-        canvasDrawer.sendCommand("BkgPainter", "setViewX", displayPosX.value);
+        canvasDrawer.sendCommand("BkgPainter", "setViewX", v);
     });
     intCacheInput(displayPosY, 'displayPosY', () => {
         let v = parseInt(displayPosY.value);
         displayPosYValue.innerHTML = `Posicion vertical (${v}%)`;
-        canvasDrawer.sendCommand("BkgPainter", "setViewY", displayPosY.value);
+        canvasDrawer.sendCommand("BkgPainter", "setViewY", v);
     });
     intCacheInput(ledMatrixWidth, 'ledMatrixWidth', () => {
         let ww = parseInt(ledMatrixWidth.value);
@@ -410,7 +414,13 @@ async function loadComponents() {
 
     logI('./templates.json file loaded: ' + JSON.stringify(initNodes));
     wsConnection.init(initNodes);
+    window.requestAnimationFrame(step);
 }
+
+function step(timestamp) {
+    window.requestAnimationFrame(step);
+}
+
 function setupToggleBehavior(myRadios) {
     for (let x = 0; x < myRadios.length; x++) {
         myRadios[x].onclick = function () {
@@ -540,6 +550,16 @@ function loadCamDevices(camSelect) {
         });
 }
 
+function startVideo(stream) {
+    try {
+        ledXVideo.src = stream;
+        ledXVideo.play();
+        canvasDrawer.sendCommand('BkgPainter', 'setLocalVideoScreen', ledXVideo);
+        canvasDrawer.sendCommand('BkgPainter', 'setScreenState', 'PLAY');
+    } catch (e) {
+        console.log(e);
+    }
+}
 async function startCam(camSelect) {
     if (camSelect === 'NONE') {
         stopStream();
@@ -564,14 +584,14 @@ async function startCam(camSelect) {
         ledXVideo.onloadedmetadata = (e) => {
             ledXVideo.play();
             canvasDrawer.sendCommand('BkgPainter', 'setCameraScreen', ledXVideo);
-            canvasDrawer.sendCommand('BkgPainter', 'setCameraState', 'PLAY');
+            canvasDrawer.sendCommand('BkgPainter', 'setScreenState', 'PLAY');
             bkgScreenStart.checked = false
             bkgAudioStart.checked = false
             bkgMicStart.checked = false
         };
         ledXVideo.srcObject.oninactive = () => {
             bkgCamStart.checked = false
-            canvasDrawer.sendCommand('BkgPainter', 'setCameraState', 'STOP');
+            canvasDrawer.sendCommand('BkgPainter', 'setScreenState', 'STOP');
         };
     } catch (e) {
         console.log(e);

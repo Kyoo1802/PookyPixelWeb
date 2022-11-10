@@ -16,7 +16,7 @@ const char ledx3_html_h[] PROGMEM = R"(<!DOCTYPE html>
         <div class="top-bar">
             <!---Initial Banner-->
             <div class="title">
-                <h1 class="glow" style="margin: 0;">LedX</h1>
+                <h1 style="margin: 0;">LedX</h1>
                 <p>By Pixelandia Mexico</p>
             </div>
 
@@ -69,15 +69,15 @@ const char ledx3_html_h[] PROGMEM = R"(<!DOCTYPE html>
                     <div class="menu-popup" style="width: 242px;transform: translateX(-200px);">
                         <div class="range">
                             <h5 id="display-size-value">Tamaño (100%)</h5>
-                            <input id="display-size" type="range" value="100">
-                        </div>
-                        <div class="range">
-                            <h5 id="display-pos-y-value">Posicion vertical (0%)</h5>
-                            <input id="display-pos-y" type="range" value="0">
+                            <input id="display-size" type="range" value="100" min="1" max="300">
                         </div>
                         <div class="range">
                             <h5 id="display-pos-x-value">Posicion horizontal (0%)</h5>
-                            <input id="display-pos-x" type="range" value="0">
+                            <input id="display-pos-x" type="range" value="0" min="-100" max="100">
+                        </div>
+                        <div class="range">
+                            <h5 id="display-pos-y-value">Posicion vertical (0%)</h5>
+                            <input id="display-pos-y" type="range" value="0" min="-100" max="100">
                         </div>
                     </div>
                 </div>
@@ -101,11 +101,10 @@ const char ledx3_html_h[] PROGMEM = R"(<!DOCTYPE html>
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Y</p>
                     </label>
                     <canvas id="ledx-canvas"></canvas>
-                    <video id="ledx-video" playsinline style="display: none;"></video>
+                    <video id="ledx-video" playsinline style="display: none;" controls loop></video>
                 </span>
             </span>
         </div>
-
         <!---Bottom Bar-->
         <div class="bottom-bar">
             <input type="radio" id="toggle-bkg" name="bottom-menu" />
@@ -170,6 +169,7 @@ const char ledx3_html_h[] PROGMEM = R"(<!DOCTYPE html>
                             <input id="bkg-animate" type="checkbox" />
                             <label for="bkg-animate" style="font-size: 0.7em">Animacion</label>
                         </div>
+                        <!-- <input type="file" name="file[]" id="local-video" accept="video/*"> -->
                     </div>
                     <div id="toggle-bkg-cam-container" class="grow-container hide">
                         <div class="control-blocks">

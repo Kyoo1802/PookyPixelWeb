@@ -57,7 +57,7 @@ const char canvas_js_h[] PROGMEM = R"(class CanvasInfo {
             // let a = performance.now();
             this.smallCtx.drawImage(this.myCanvas, 0, 0);
             // console.log("drawImage: `"+(performance.now()-a));
-            let a = performance.now();
+            // let a = performance.now();
             this.showData = this.smallCtx.getImageData(0, 0, this.matrixW, this.matrixH).data;
             // console.log("getImageData: " + (performance.now() - a));
         }
@@ -113,6 +113,10 @@ class BkgPainter {
     setEndColor(color) {
         this.endColor = color;
     }
+    setLocalVideoScreen(videoScreen) {
+        this.type = 'LOCAL_VIDEO';
+        this.videoScreen = videoScreen;
+    }
     setCameraScreen(videoScreen) {
         this.type = 'CAMERA';
         this.videoScreen = videoScreen;
@@ -157,6 +161,8 @@ class BkgPainter {
                 this.setColorState(value);
             } else if (key === "setCameraScreen") {
                 this.setCameraScreen(value);
+            } else if (key === "setLocalVideoScreen") {
+                this.setLocalVideoScreen(value);
             } else if (key === "setVideoScreen") {
                 this.setVideoScreen(value);
             } else if (key === "setScreenState") {
@@ -237,6 +243,20 @@ class BkgPainter {
             } else {
                 canvasInfo.myCtx.drawImage(this.videoScreen, x, y, w, h, canvasInfo.w / 4 - 1, 0, canvasInfo.w / 2, canvasInfo.h);
             }
+        } else if (this.videoScreen && this.type === "LOCAL_VIDEO" && this.screenState === 'PLAY') {
+            canvasInfo.myCtx.clearRect(0, 0, canvasInfo.w, canvasInfo.h);
+            let ratio = this.viewInfo.size / 100;
+            let ratioX = (this.viewInfo.posX + 100) / 100 - 1;
+            let ratioY = (this.viewInfo.posY + 100) / 100 - 1;
+            let sw = this.videoScreen.videoWidth;
+            let sh = this.videoScreen.videoHeight;
+            let dw = canvasInfo.w;
+            let dh = canvasInfo.h;
+            canvasInfo.myCtx.save();
+
+            canvasInfo.myCtx.rotate(Math.PI * 3 / 2);
+            canvasInfo.myCtx.drawImage(this.videoScreen, 0, 0, sw, sh, dh * ratioY, dw * ratioX, dw * ratio, (dw * ratio) / sw * sh);
+            canvasInfo.myCtx.restore();
         } else if ((this.type === 'AUDIO' || this.type === 'MIC') && this.audioStream) {
             canvasInfo.myCtx.lineCap = 'round';
             if (this.audioState === 'FREQUENCY') {
