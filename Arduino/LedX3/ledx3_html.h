@@ -34,7 +34,7 @@ const char ledx3_html_h[] PROGMEM = R"(<!DOCTYPE html>
 
                         <div class="range">
                             <h5 id="driver-fps-value">FPS (20)</h5>
-                            <input id="driver-fps" type="range" value="20" min="10" max="35">
+                            <input id="driver-fps" type="range" value="20" min="5" max="24">
                         </div>
                         <p id="render-msg" style="text-align: left">
                             <b>FPS:</b>0</br><b>Latencia del render:</b>0 ms
