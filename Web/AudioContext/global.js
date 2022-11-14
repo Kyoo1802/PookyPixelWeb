@@ -1,5 +1,7 @@
 // Common
 const localStorage = window.localStorage;
+var currentDrag = null;
+var loadedVideos = [];
 
 function radios(name) {
     return document.getElementsByName(name);
@@ -220,6 +222,11 @@ const deviceStatusMsg = id("device-status-msg");
 const renderMsg = id("render-msg");
 const driversUi = id("drivers");
 const localVideo = id("local-video");
+const playlist = id("playlist");
+const playlistControls = id("playlist-controls");
+const playlistProgress = id("playlist-progress");
+const videoProgress = id("video-progress");
+const videoTimer = id("video-timer");
 
 let radioState = {};
 let wsConnection = new WsConnection();
@@ -272,8 +279,103 @@ async function loadComponents() {
         }
     });
     change(localVideo, (e) => {
-        startVideo(URL.createObjectURL(localVideo.files[0]));
+        let isFirstVideo = loadedVideos.length == 0;
+
+        for (const file of localVideo.files) {
+            let playlistItem = htmlToElement('<li draggable="true">' + file.name + '</li>');
+            addDragAndDrop(playlistItem, (currentPos, droppedPos) => {
+                if (currentPos < droppedPos) {
+                    for (let i = currentPos; i < droppedPos; i++) {
+                        swap(i, i + 1);
+                    }
+                } else {
+                    for (let i = currentPos; i > droppedPos; i--) {
+                        swap(i, i - 1);
+                    }
+                }
+                function swap(a, b) {
+                    let droppedVideo = loadedVideos[a];
+                    loadedVideos[a] = loadedVideos[b];
+                    loadedVideos[b] = droppedVideo;
+                }
+            });
+            let videoObj = { file: file, item: playlistItem };
+            click(playlistItem, () => playVideo(videoObj));
+            playlist.appendChild(playlistItem);
+
+            loadedVideos[loadedVideos.length] = videoObj;
+        }
+
+        if (isFirstVideo) {
+            show(playlistControls);
+            show(playlistProgress);
+            playVideo(loadedVideos[0]);
+        }
+        localVideo.value = '';
     });
+    ledXVideo.addEventListener('ended', (event) => {
+        playNext();
+    });
+    function addDragAndDrop(newItem, onDropped) {
+        // HIGHLIGHT DROPZONES
+        newItem.ondragstart = (ev) => {
+            ev.dataTransfer.setData("text/plain", ev.target.innerText);
+            ev.dataTransfer.setData("text/html", ev.target.outerHTML);
+            ev.dataTransfer.setData("text/uri-list", ev.target.ownerDocument.location.href);
+            ev.dataTransfer.dropEffect = "move";
+            currentDrag = newItem;
+            newItem.parentNode.classList.add("hint");
+        };
+        // HIGHLIGHT ACTIVE DROPZONE
+        newItem.ondragenter = (ev) => {
+            if (newItem != currentDrag) {
+                let items = newItem.parentNode.getElementsByTagName("li");
+                let currentpos = 0, droppedpos = 0;
+                for (let it = 0; it < items.length; it++) {
+                    if (currentDrag == items[it]) { currentpos = it; }
+                    if (newItem == items[it]) { droppedpos = it; }
+                }
+                if (currentpos < droppedpos) {
+                    newItem.classList.add("active-below");
+                } else {
+                    newItem.classList.add("active-above");
+                }
+            }
+        };
+        // REMOVE HIGHLIGHT ACTIVE DROPZONE
+        newItem.ondragleave = () => {
+            newItem.classList.remove("active-above");
+            newItem.classList.remove("active-below");
+        };
+        // REMOVE HIGHLIGHT DROPZONES
+        newItem.ondragend = () => newItem.parentNode.classList.remove("hint");
+        // PREVENT THE DEFAULT "DROP", SO WE CAN DO OUR OWN
+        newItem.ondragover = (evt) => evt.preventDefault();
+        // ON DROP SWAP POSITIONS
+        newItem.ondrop = (evt) => {
+            evt.preventDefault();
+            let items = newItem.parentNode.getElementsByTagName("li");
+            if (newItem != currentDrag) {
+                let currentpos = 0, droppedpos = 0;
+                for (let it = 0; it < items.length; it++) {
+                    if (currentDrag == items[it]) { currentpos = it; }
+                    if (newItem == items[it]) { droppedpos = it; }
+                    items[it].classList.remove("active");
+                    items[it].classList.remove("active-above");
+                    items[it].classList.remove("active-below");
+                    items[it].classList.remove("hint");
+                }
+                if (currentpos < droppedpos) {
+                    newItem.parentNode.insertBefore(currentDrag, newItem.nextSibling);
+                } else {
+                    newItem.parentNode.insertBefore(currentDrag, newItem);
+                }
+                onDropped(currentpos, droppedpos);
+            }
+        };
+        currentDrag = null;
+    }
+    progressLoop();
     click(bkgScreenStart, () => {
         if (radioState['bkg-screen-start'] == 0) {
             stopStream();
@@ -550,10 +652,94 @@ function loadCamDevices(camSelect) {
         });
 }
 
-function startVideo(stream) {
+async function videoControls(action) {
+    if (!loadedVideos || loadedVideos.length == 0) {
+        logI('Nothing to play.');
+        return;
+    }
+    if (action === 'PLAY') {
+        if (ledXVideo.paused) {
+            await ledXVideo.play();
+        } else {
+            ledXVideo.pause();
+        }
+    } else if (action === 'STOP') {
+        ledXVideo.pause();
+        ledXVideo.currentTime = 0;
+    } else if (action === 'NEXT') {
+        playNext();
+    } else if (action === 'PREVIOUS') {
+        playPrevious();
+    }
+}
+function playVideo(video) {
+    startLocalVideo(URL.createObjectURL(video.file))
+        .then(() => {
+            loadedVideos.forEach(loadedVideo => {
+                loadedVideo.playing = false;
+                loadedVideo.item.classList.remove("playing");
+            });
+            video.playing = true;
+            video.item.classList.add("playing");
+        });
+}
+function playNext() {
+    let lastPlayedVideoIdx = null;
+    for (let idx = 0; idx < loadedVideos.length; idx++) {
+        if (loadedVideos[idx].playing) {
+            lastPlayedVideoIdx = idx;
+        }
+    }
+
+    if (lastPlayedVideoIdx != null) {
+        let nextVideoIdx = lastPlayedVideoIdx + 1;
+        if (nextVideoIdx < loadedVideos.length) {
+            playVideo(loadedVideos[nextVideoIdx]);
+        } else {
+            playVideo(loadedVideos[0]);
+        }
+    }
+}
+function playPrevious() {
+    let lastPlayedVideoIdx = null;
+    for (let idx = 0; idx < loadedVideos.length; idx++) {
+        if (loadedVideos[idx].playing) {
+            lastPlayedVideoIdx = idx;
+        }
+    }
+
+    if (lastPlayedVideoIdx != null) {
+        let previousVideoIdx = lastPlayedVideoIdx - 1;
+        if (previousVideoIdx < 0) {
+            playVideo(loadedVideos[loadedVideos.length - 1]);
+        } else {
+            playVideo(loadedVideos[previousVideoIdx]);
+        }
+    }
+}
+function progressLoop() {
+    setInterval(function () {
+        if (ledXVideo.duration) {
+            videoProgress.value = Math.round((ledXVideo.currentTime / ledXVideo.duration) * 100);
+            videoTimer.innerHTML = timeConvert(Math.round(ledXVideo.currentTime)) + " / " + timeConvert(Math.round(ledXVideo.duration));
+        }
+    }, 500);
+}
+function timeConvert(num) {
+    let hh = Math.floor(num / 3600);
+    num = num % 3600;
+    let mm = Math.floor(num / 60);
+    let ss = num % 60;
+
+    return hh > 0 ? d2(hh) + ":" + d2(mm) + ":" + d2(ss) : d2(mm) + ":" + d2(ss);
+}
+function d2(t) {
+    return t < 10 ? '0' + t : t;
+}
+async function startLocalVideo(stream) {
     try {
         ledXVideo.src = stream;
-        ledXVideo.play();
+        await videoControls('PLAY');
         canvasDrawer.sendCommand('BkgPainter', 'setLocalVideoScreen', ledXVideo);
         canvasDrawer.sendCommand('BkgPainter', 'setScreenState', 'PLAY');
     } catch (e) {

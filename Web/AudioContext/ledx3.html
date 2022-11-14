@@ -101,7 +101,7 @@
                         <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Y</p>
                     </label>
                     <canvas id="ledx-canvas"></canvas>
-                    <video id="ledx-video" playsinline style="display: none;" controls loop></video>
+                    <video id="ledx-video" playsinline style="display: none;" controls autoplay="false"></video>
                 </span>
             </span>
         </div>
@@ -143,6 +143,10 @@
                         <label id="toggle-bkg-audio-lbl" for="toggle-bkg-audio" class="toggle">
                             <p>Compartir Audio</p>
                         </label>
+                        <input type="radio" id="toggle-bkg-video" name="bkg-menu" />
+                        <label id="toggle-bkg-video-lbl" for="toggle-bkg-video" class="toggle">
+                            <p>Cargar Videos</p>
+                        </label>
                     </div>
 
                     <div id="toggle-bkg-color-container" class="grow-container">
@@ -169,7 +173,6 @@
                             <input id="bkg-animate" type="checkbox" />
                             <label for="bkg-animate" style="font-size: 0.7em">Animacion</label>
                         </div>
-                        <input type="file" name="file[]" id="local-video" accept="video/*" style="display: none;" >
                     </div>
                     <div id="toggle-bkg-cam-container" class="grow-container hide">
                         <div class="control-blocks">
@@ -225,6 +228,31 @@
                             <label for="mic-1" class="toggle">
                                 <p>Tiempo</p>
                             </label>
+                        </div>
+                    </div>
+                    <div id="toggle-bkg-video-container" class="grow-container hide">
+                        <div class="control-blocks" style="width:auto">
+                            <div style="position:sticky;background:var(--bar-black);top:0px;">
+                                <button style="vertical-align:top;"
+                                    onclick="document.getElementById('local-video').click()">Cargar videos</button>
+                                <input type="file" name="file[]" id="local-video" accept="video/*" multiple
+                                    style="display:none">
+                                <div id="playlist-controls" class="hide"
+                                    style="display:inline-block; padding-left:35px;">
+                                    <button onclick="videoControls('PLAY')">&#x23EF;&#xFE0E;</button>
+                                    <button onclick="videoControls('STOP')">&#x23F9;&#xFE0E;</button>
+                                    <button onclick="videoControls('PREVIOUS')">&#x23F4;&#xFE0E;</button>
+                                    <button onclick="videoControls('NEXT')">&#x23F5;&#xFE0E;</button>
+                                    <!-- <button onclick="videoControls('RANDOM')">&#x1F500;&#xFE0E;</button> -->
+                                    <!-- <button onclick="videoControls('REPEAT')">&#x1F501;&#xFE0E;</button> -->
+                                </div>
+                                <div id="playlist-progress" class="hide">
+                                    <progress id="video-progress" value="0" max="100"> 0% </progress>
+                                    <label id="video-timer" for="video-progress" role="timer"></label>
+                                </div>
+                            </div>
+                            <ul id="playlist" class="draggable">
+                            </ul>
                         </div>
                     </div>
                 </div>
