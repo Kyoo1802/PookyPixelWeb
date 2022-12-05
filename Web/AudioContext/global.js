@@ -282,26 +282,54 @@ async function loadComponents() {
         let isFirstVideo = loadedVideos.length == 0;
 
         for (const file of localVideo.files) {
-            let playlistItem = htmlToElement('<li draggable="true">' + file.name + '</li>');
+            let playlistItem = htmlToElement('<li draggable="true" style="display:flex;column-gap: 10px;"></li>');
+            let videoObj = { file: file, item: playlistItem };
+            let moveUp = htmlToElement('<button> Up </button>');
+            click(moveUp, (evt) => {
+                let idx = currentItemIdx(moveUp);
+                if (idx <= 0) { evt.stopPropagation(); return; }
+                swapVideos(idx, idx - 1);
+                moveUp.parentNode.parentNode.insertBefore(getItem(moveUp, idx), getItem(moveUp, idx - 1));
+                evt.stopPropagation();
+            });
+            playlistItem.appendChild(moveUp);
+            let moveDown = htmlToElement('<button> Down </button>');
+            click(moveDown, (evt) => {
+                let idx = currentItemIdx(moveDown);
+                if (idx >= numItems(moveDown) - 1) { evt.stopPropagation(); return; }
+                swapVideos(idx, idx + 1);
+                moveDown.parentNode.parentNode.insertBefore(getItem(moveDown, idx), getItem(moveDown, idx + 1).nextSibling);
+                evt.stopPropagation();
+            });
+            playlistItem.appendChild(moveDown);
+            let videoItem = htmlToElement('<span> ' + file.name + ' </span>');
+            playlistItem.appendChild(videoItem);
+            let remove = htmlToElement('<button> X </button>');
+            click(remove, (evt) => {
+                let idx = currentItemIdx(remove);
+                if (videoObj.playing) {
+                    videoControls('STOP');
+                }
+                loadedVideos.splice(idx, 1);
+                playlistItem.parentNode.removeChild(playlistItem);
+                evt.stopPropagation();
+            });
+            playlistItem.appendChild(remove);
             addDragAndDrop(playlistItem, (currentPos, droppedPos) => {
                 if (currentPos < droppedPos) {
                     for (let i = currentPos; i < droppedPos; i++) {
-                        swap(i, i + 1);
+                        swapVideos(i, i + 1);
                     }
                 } else {
                     for (let i = currentPos; i > droppedPos; i--) {
-                        swap(i, i - 1);
+                        swapVideos(i, i - 1);
                     }
                 }
-                function swap(a, b) {
-                    let droppedVideo = loadedVideos[a];
-                    loadedVideos[a] = loadedVideos[b];
-                    loadedVideos[b] = droppedVideo;
-                }
             });
-            let videoObj = { file: file, item: playlistItem };
-            click(playlistItem, () => playVideo(videoObj));
             playlist.appendChild(playlistItem);
+            click(playlistItem, () => {
+                playVideo(videoObj);
+            });
 
             loadedVideos[loadedVideos.length] = videoObj;
         }
@@ -309,13 +337,32 @@ async function loadComponents() {
         if (isFirstVideo) {
             show(playlistControls);
             show(playlistProgress);
-            playVideo(loadedVideos[0]);
         }
         localVideo.value = '';
     });
-    ledXVideo.addEventListener('ended', (event) => {
+    ledXVideo.addEventListener('ended', () => {
         playNext();
     });
+    function getItem(currentItem, idx) {
+        return currentItem.parentNode.parentNode.getElementsByTagName("li")[idx];
+    }
+    function numItems(currentItem) {
+        let items = currentItem.parentNode.parentNode.getElementsByTagName("li");
+        return items.length;
+    }
+    function currentItemIdx(currentItem) {
+        let items = currentItem.parentNode.parentNode.getElementsByTagName("li");
+        let currentIdx = 0;
+        for (let idx = 0; idx < items.length; idx++) {
+            if (currentItem.parentNode == items[idx]) { currentIdx = idx; }
+        }
+        return currentIdx;
+    }
+    function swapVideos(a, b) {
+        let tmpVideo = loadedVideos[a];
+        loadedVideos[a] = loadedVideos[b];
+        loadedVideos[b] = tmpVideo;
+    }
     function addDragAndDrop(newItem, onDropped) {
         // HIGHLIGHT DROPZONES
         newItem.ondragstart = (ev) => {
