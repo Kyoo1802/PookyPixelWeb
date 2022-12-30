@@ -531,50 +531,218 @@ class RainBkg {
 }
 
 class Star {
-    constructor(canvasInfo, r, c) {
-        this.r = r;
-        this.c = c;
-        this.arrStars = [];
-        this.rChange = 0.065;
-        this.setRandomPosition(canvasInfo.w, canvasInfo.h);
+    constructor(canvasInfo, idx) {
+        this.speed = 0.1;
+        this.acceleration = 40 + 40 * Math.random();
+        this.r = 0;
+        this.idx = idx;
+        this.direction = 1;
+        this.newPosition(canvasInfo.w, canvasInfo.h);
     }
-    setRandomPosition(w, h) {
+    newPosition(w, h) {
         this.x = Math.floor((Math.random() * w) + 1);
         this.y = Math.floor((Math.random() * h) + 1);
+        this.min = -10;
+        this.max = 320;
     }
-    update(canvasInfo) {
-        if (this.r > 3.5 || this.r < .5) {
-            this.rChange = -this.rChange;
-            if (this.r < .8 && Math.random() < .5) {
-                this.setRandomPosition(canvasInfo.w, canvasInfo.h);
+    update(canvasInfo, { shape, useFill, size, color, animation }) {
+        const myCtx = canvasInfo.myCtx;
+        this.counter++
+        if (animation === 'RAIN') {
+            this.r = size;
+            if (this.y > this.max) {
+                this.newPosition(canvasInfo.w, canvasInfo.h);
+                this.y = this.min - size;
             }
+            this.y += this.speed * this.acceleration;
+        } else if (animation === 'FLY') {
+            this.r = size;
+            if (this.y < this.min) {
+                this.newPosition(canvasInfo.w, canvasInfo.h);
+                this.y = this.max + size;
+            }
+            this.y -= this.speed * this.acceleration;
+        } else if (animation === 'WIND') {
+            this.r = size;
+            if (this.x < this.min) {
+                this.newPosition(canvasInfo.w, canvasInfo.h);
+                this.x = this.max * 2 + size;
+            }
+            this.x -= this.speed * this.acceleration;
+            this.y += this.speed * 4;
+        } else if (animation === 'GROW') {
+            if (this.r > this.max * 2.5) {
+                this.newPosition(canvasInfo.w, canvasInfo.h);
+                this.x = 300;
+                this.y = 200;
+                this.r = this.min - this.idx * 35;
+            }
+            this.r += this.speed * 100;
+            if (this.r < 0) {
+                return;
+            }
+        } else if (animation === 'RGROW') {
+            if (this.r > this.max * 1.5) {
+                this.newPosition(canvasInfo.w, canvasInfo.h);
+                this.r = this.min - this.idx * 35;
+            }
+            this.r += this.speed * this.acceleration;
+            if (this.r < 0) {
+                return;
+            }
+        } else if (animation === 'GLOW') {
+            if (this.r > this.max * .1) {
+                this.direction = -1;
+                this.r = this.max * .1;
+            }
+            if (this.r < 1 && this.direction == -1) {
+                this.newPosition(canvasInfo.w, canvasInfo.h);
+                this.direction = 1;
+                this.r = Math.floor((Math.random() * 10) - 5);
+            }
+            this.r += this.speed * 10 * this.direction;
+            if (this.r < 0) {
+                return;
+            }
+        } else if (animation === 'FIX') {
+            myCtx.save();
+            this.x = this.idx * 10;
+            this.y = 0;
+            this.r = this.max;
+            myCtx.beginPath();
+            myCtx.translate(this.x, this.y);
+            myCtx.moveTo(0, 0);
+            myCtx.lineTo(10, 0);
+            myCtx.lineTo(10, this.r);
+            myCtx.lineTo(0, this.r);
+            myCtx.lineTo(0, 0);
+            myCtx.closePath();
+            myCtx.fillStyle = color;
+            myCtx.fill();
+            myCtx.restore();
+            return;
         }
-        this.r += this.rChange * canvasInfo.framesPassed;
-        if (this.r > 0) {
-            canvasInfo.myCtx.beginPath();
-            canvasInfo.myCtx.arc(this.x, this.y, this.r, 0, 2 * Math.PI, false);
-            canvasInfo.myCtx.fillStyle = this.c;
-            canvasInfo.myCtx.fill();
+
+        if (shape === 'LINE') {
+            this.star(myCtx, 1);
+        } else if (shape === 'DIAMOND') {
+            this.star(myCtx, 2);
+        } else if (shape === 'TRIANGLE') {
+            this.star(myCtx, 3);
+        } else if (shape === 'STAR') {
+            this.star(myCtx, 4);
+        } else if (shape === 'STAR5') {
+            this.star(myCtx, 5);
+        } else if (shape === 'SNOWFLAKE') {
+            this.star(myCtx, 6);
+        } else if (shape === 'HEART') {
+            this.heart(myCtx);
+        } else if (shape === 'SQUARE') {
+            this.square(myCtx);
+        } else if (shape === 'CIRCLE') {
+            this.circle(myCtx);
         }
+        if (useFill) {
+            myCtx.fillStyle = color;
+            myCtx.fill();
+        } else {
+            myCtx.lineWidth = 5;
+            myCtx.strokeStyle = color;
+            myCtx.stroke();
+        }
+        myCtx.restore();
+    }
+    star(myCtx, spikes) {
+        myCtx.beginPath();
+        myCtx.translate(this.x, this.y);
+        myCtx.moveTo(0, 0 - this.r);
+        for (var i = 0; i < spikes; i++) {
+            myCtx.rotate(Math.PI / spikes);
+            myCtx.lineTo(0, 0 - (this.r * .5));
+            myCtx.rotate(Math.PI / spikes);
+            myCtx.lineTo(0, 0 - this.r);
+        }
+        myCtx.closePath();
+    }
+    heart(myCtx) {
+        var x = this.x;
+        var y = this.y - this.r / 2;
+        var width = this.r;
+        var height = this.r;
+
+        myCtx.save();
+        myCtx.beginPath();
+        var topCurveHeight = height * 0.3;
+        myCtx.moveTo(x, y + topCurveHeight);
+        // top left curve
+        myCtx.bezierCurveTo(
+            x, y,
+            x - width / 2, y,
+            x - width / 2, y + topCurveHeight
+        );
+
+        // bottom left curve
+        myCtx.bezierCurveTo(
+            x - width / 2, y + (height + topCurveHeight) / 2,
+            x, y + (height + topCurveHeight) / 2,
+            x, y + height
+        );
+
+        // bottom right curve
+        myCtx.bezierCurveTo(
+            x, y + (height + topCurveHeight) / 2,
+            x + width / 2, y + (height + topCurveHeight) / 2,
+            x + width / 2, y + topCurveHeight
+        );
+
+        // top right curve
+        myCtx.bezierCurveTo(
+            x + width / 2, y,
+            x, y,
+            x, y + topCurveHeight
+        );
+
+        myCtx.closePath();
+    }
+    square(myCtx) {
+        myCtx.beginPath();
+        myCtx.translate(this.x, this.y);
+        myCtx.moveTo(-this.r, - this.r);
+        myCtx.lineTo(this.r, - this.r);
+        myCtx.lineTo(this.r, this.r);
+        myCtx.lineTo(-this.r, this.r);
+        myCtx.lineTo(-this.r, - this.r);
+        myCtx.closePath();
+    }
+    circle(myCtx) {
+        myCtx.beginPath()
+        myCtx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+        myCtx.closePath();
     }
 }
 
 class StarBkg {
     constructor() {
-        this.color = "#ffecd3";
+        this.rainbow = ["#80f31f", "#86f01b", "#8ced18", "#92ea14", "#99e611", "#9fe20e", "#a5de0b", "#abda09", "#b1d507", "#b7d005", "#bccc03", "#c2c602", "#c7c101", "#ccbb01", "#d1b601", "#d6b001", "#dbaa01", "#dfa402", "#e39e03", "#e79804", "#ea9106", "#ee8b08", "#f1850a", "#f37e0c", "#f6780f", "#f87212", "#fa6b16", "#fb6519", "#fd5f1d", "#fe5922", "#fe5326", "#fe4d2b", "#fe472f", "#fe4234", "#fd3c3a", "#fc373f", "#fb3244", "#fa2d4a", "#f82850", "#f52456", "#f31f5c", "#f01b62", "#ed1868", "#ea146f", "#e61175", "#e20e7b", "#de0b82", "#da0988", "#d5078e", "#d00595", "#cc039b", "#c602a1", "#c101a7", "#bb01ad", "#b601b3", "#b001b9", "#aa01be", "#a402c4", "#9e03c9", "#9804ce", "#9106d3", "#8b08d8", "#850adc", "#7e0ce0", "#780fe4", "#7212e8", "#6b16ec", "#6519ef", "#5f1df2", "#5922f4", "#5326f7", "#4d2bf9", "#472ffa", "#4234fc", "#3c3afd", "#373ffe", "#3244fe", "#2d4afe", "#2850fe", "#2456fe", "#1f5cfd", "#1b62fc", "#1868fb", "#146ff9", "#1175f7", "#0e7bf5", "#0b82f2", "#0988ef", "#078eec", "#0595e9", "#039be5", "#02a1e1", "#01a7dd", "#01add8", "#01b3d4", "#01b9cf", "#01beca", "#02c4c5", "#03c9bf", "#04ceba"];
         this.arrStars = [];
         this.numStars = 100;
+        this.size = 10;
+        this.elements = 100;
+        this.counter = 0;
     }
     init(canvasInfo) {
         for (let i = 0; i < this.numStars; i++) {
-            let randR = Math.random() * 2 + .5;
-            let star = new Star(canvasInfo, randR, this.color);
+            let star = new Star(canvasInfo, i);
             this.arrStars.push(star);
         }
     }
     paint(canvasInfo, time) {
-        for (let i = 0; i < this.arrStars.length; i++) {
-            this.arrStars[i].update(canvasInfo);
+        this.counter += 1;
+        this.arrColorRatio = this.rainbow.length / this.elements;
+        for (let i = 0; i < this.elements; i++) {
+            const c = this.rainbow[parseInt((i * this.arrColorRatio + this.counter) % this.rainbow.length)];
+            this.arrStars[i].update(canvasInfo,
+                { shape: 'SNOWFLAKE', size: this.size, useFill: true, color: c, animation: 'FIX' });
         }
     }
 }
