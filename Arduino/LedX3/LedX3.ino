@@ -13,9 +13,9 @@
 #include <FastLED.h>
 
 #define USE_SERIAL Serial
-#define PIN_LED_1     2
+#define PIN_LED_1     15
 #define PIN_LED_2     13
-#define PIN_LED_3     15
+#define PIN_LED_3     2
 //#define PIN_LED_4     2
 #define NUM_CHANNELS   3
 #define NUM_LEDS     1024 // 23.25 FPS for 1200 LEDS
