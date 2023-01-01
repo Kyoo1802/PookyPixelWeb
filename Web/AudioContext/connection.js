@@ -28,7 +28,7 @@ class WsConnection {
         // setTimeout(() => {
         //     this.wsConnect();
         // }, 3000);
-         this.createFakeNode();
+        this.createFakeNode();
     }
     createFakeNode() {
         let newDriver = new Driver({ command: "IDENTIFY", id: 'Ledx-1001', ip: '192.168.1.1', type: 'DRIVER', state: 'READY', channels: 2, leds: 1000 }, this);
@@ -161,8 +161,8 @@ class Driver {
     }
     toHtml(prevHtml = '') {
         const m = this.metadata;
-        const newHtml = 'Ip: ' + m.ip + ', Type: ' + m.type + ', Channels: ' + m.channels
-            + ', Leds: ' + m.leds;
+        const newHtml = 'Ip: ' + m.ip + ', Canales: ' + m.channels
+            + ', Leds por Canal: ' + m.leds;
         return newHtml === prevHtml ? '' : newHtml;
     }
     setTemplateName(cIdx, templateName) {
